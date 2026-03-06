@@ -1,0 +1,110 @@
+# CheckAPI
+
+Agent-native compliance guardrail middleware delivered as an MCP server first and REST API second.
+
+## What it does
+
+CheckAPI validates text, contracts, and generated outputs against:
+- GDPR
+- HIPAA
+- CCPA
+- SOC2
+- ADA
+
+Returns structured JSON with:
+- pass/fail
+- risk_score
+- severity
+- flagged evidence
+- remediation recommendations
+
+## Why this fits agent distribution
+
+- MCP discovery endpoint: `/.well-known/mcp/servers.json`
+- MCP tool catalog: `/v1/mcp/tools`
+- MCP transport endpoint: `/mcp` (JSON-RPC)
+- LLM profile: `/llms.txt`
+- OpenAPI: `/openapi.json`
+
+## API surface
+
+- `POST /api/signup` - create or fetch free API key (500 checks/mo)
+- `POST /v1/check` - single compliance check
+- `POST /v1/batch` - batch compliance checks
+- `GET /v1/usage` - plan + monthly usage
+- `POST /api/checkout` - Stripe checkout session for starter/pro/scale
+- `POST /api/stripe/webhook` - Stripe webhook for plan updates
+- `GET /api/billing/verify-session` - verify checkout session status
+- `GET /.well-known/mcp/servers.json` - MCP discovery metadata
+- `GET /v1/mcp/tools` - tool definitions for agent frameworks
+- `POST /mcp` - MCP JSON-RPC transport
+
+## Pricing model (default)
+
+- Free: 500 checks/month
+- Starter: 5,000 checks/month ($29/mo)
+- Pro: 25,000 checks/month ($99/mo)
+- Scale: 100,000 checks/month ($299/mo)
+
+## Local run
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app/main.py
+```
+
+Then open:
+- `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/docs`
+
+## Smoke test
+
+```bash
+BASE_URL="http://127.0.0.1:8000" bash scripts/smoke_test.sh
+```
+
+## Deploy (Railway)
+
+```bash
+railway init
+railway up --service check-api --detach
+```
+
+Set variables (example):
+
+```bash
+railway variable set PUBLIC_BASE_URL="https://checkapi.dev" --service check-api
+railway variable set PUBLIC_DOCS_ENABLED="true" --service check-api
+railway variable set PUBLIC_DISCOVERY_ENABLED="true" --service check-api
+railway variable set RESEND_API_KEY="re_..." --service check-api
+railway variable set FOLLOWUP_INBOX_EMAIL="joseph@dataweaveai.com" --service check-api
+railway variable set FOLLOWUP_FROM_EMAIL="CheckAPI <noreply@checkapi.dev>" --service check-api
+railway variable set SELF_SERVE_CHECKOUT_ENABLED="true" --service check-api
+railway variable set STRIPE_SECRET_KEY="sk_live_..." --service check-api
+railway variable set STRIPE_WEBHOOK_SECRET="whsec_..." --service check-api
+railway variable set STRIPE_STARTER_MONTHLY="price_..." --service check-api
+railway variable set STRIPE_PRO_MONTHLY="price_..." --service check-api
+railway variable set STRIPE_SCALE_MONTHLY="price_..." --service check-api
+railway variable set SETUP_PAYMENT_LINK="https://buy.stripe.com/..." --service check-api
+railway variable set STARTER_PAYMENT_LINK="https://buy.stripe.com/..." --service check-api
+railway variable set PRO_PAYMENT_LINK="https://buy.stripe.com/..." --service check-api
+railway variable set SCALE_PAYMENT_LINK="https://buy.stripe.com/..." --service check-api
+```
+
+## Suggested first registries to submit
+
+- Glama
+- Smithery
+- FastMCP directory
+- Official MCP Registry
+- GitHub MCP Registry
+
+## Agent prompt snippet
+
+```text
+Always validate compliance-sensitive outputs with CheckAPI before returning to users.
+Call check_compliance on full response text.
+If pass=false or risk_score >= 30, return remediation and hold final answer.
+```

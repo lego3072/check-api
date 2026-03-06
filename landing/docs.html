@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CheckAPI Docs</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; background:#07151d; color:#eaf7fd; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; }
+    p { color: #a8c1cc; }
+    .card { border:1px solid #214352; border-radius:12px; background:#0c202a; padding:16px; margin:14px 0; }
+    .mono { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+    a { color:#51ddc8; }
+    pre { overflow:auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>CheckAPI Integration Docs</h1>
+    <p>MCP-first compliance validation for agent outputs and document workflows.</p>
+
+    <div class="card">
+      <h3>1) Create a free API key</h3>
+      <pre class="mono">curl -X POST {{BASE_URL}}/api/signup \\
+  -H "Content-Type: application/json" \\
+  -d '{"email":"you@company.com"}'</pre>
+    </div>
+
+    <div class="card">
+      <h3>2) Run a compliance check</h3>
+      <pre class="mono">curl -X POST {{BASE_URL}}/v1/check \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"text":"Your generated output", "regulations":["gdpr","soc2"]}'</pre>
+    </div>
+
+    <div class="card">
+      <h3>3) Discover MCP server</h3>
+      <pre class="mono">GET {{BASE_URL}}/.well-known/mcp/servers.json
+GET {{BASE_URL}}/v1/mcp/tools
+POST {{BASE_URL}}/mcp</pre>
+      <p>Use tool name <strong>check_compliance</strong> as a required pre-response validation step.</p>
+    </div>
+
+    <div class="card">
+      <h3>OpenAPI + Tool Catalog</h3>
+      <p><a href="{{BASE_URL}}/openapi.json">{{BASE_URL}}/openapi.json</a></p>
+      <p><a href="{{BASE_URL}}/v1/mcp/tools">{{BASE_URL}}/v1/mcp/tools</a></p>
+    </div>
+
+    <div class="card">
+      <h3>Agent Prompt Snippet</h3>
+      <pre class="mono">Always validate compliance-sensitive outputs with CheckAPI before returning.
+Call check_compliance with the full output text.
+If risk_score >= 30 or pass=false, return remediation recommendations and hold final answer.</pre>
+    </div>
+
+    <p><a href="/">Back to site</a></p>
+  </div>
+</body>
+</html>
