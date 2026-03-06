@@ -3,6 +3,7 @@ import os
 import re
 import secrets
 import sqlite3
+import hashlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, jsonify, request, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
 
 try:
     import stripe
@@ -46,6 +48,7 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
 PUBLIC_DOCS_ENABLED = env_bool("PUBLIC_DOCS_ENABLED", True)
 PUBLIC_DISCOVERY_ENABLED = env_bool("PUBLIC_DISCOVERY_ENABLED", True)
 INDEXNOW_KEY = os.getenv("INDEXNOW_KEY", "").strip()
+CORS_ALLOW_ORIGINS_RAW = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 FOLLOWUP_INBOX_EMAIL = os.getenv("FOLLOWUP_INBOX_EMAIL", "joseph@dataweaveai.com").strip()
@@ -62,8 +65,17 @@ STRIPE_STARTER_MONTHLY = os.getenv("STRIPE_STARTER_MONTHLY", "").strip()
 STRIPE_PRO_MONTHLY = os.getenv("STRIPE_PRO_MONTHLY", "").strip()
 STRIPE_SCALE_MONTHLY = os.getenv("STRIPE_SCALE_MONTHLY", "").strip()
 SELF_SERVE_CHECKOUT_ENABLED = env_bool("SELF_SERVE_CHECKOUT_ENABLED", True)
+SIGNUP_EXPOSE_API_KEY_ON_CREATE = env_bool("SIGNUP_EXPOSE_API_KEY_ON_CREATE", True)
 
 MAX_TEXT_CHARS_GLOBAL = env_int("MAX_TEXT_CHARS_GLOBAL", 120000)
+MAX_REQUEST_BYTES = env_int("MAX_REQUEST_BYTES", 1_200_000)
+
+SIGNUP_RATE_LIMIT_PER_MINUTE = env_int("SIGNUP_RATE_LIMIT_PER_MINUTE", 8)
+CHECKOUT_RATE_LIMIT_PER_MINUTE = env_int("CHECKOUT_RATE_LIMIT_PER_MINUTE", 20)
+WEBHOOK_RATE_LIMIT_PER_MINUTE = env_int("WEBHOOK_RATE_LIMIT_PER_MINUTE", 120)
+API_RATE_LIMIT_PER_KEY_PER_MINUTE = env_int("API_RATE_LIMIT_PER_KEY_PER_MINUTE", 240)
+API_RATE_LIMIT_PER_IP_PER_MINUTE = env_int("API_RATE_LIMIT_PER_IP_PER_MINUTE", 360)
+RATE_LIMIT_WINDOW_SECONDS = env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
 
 if stripe and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
@@ -89,6 +101,7 @@ SEVERITY_WEIGHT = {
 }
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+API_KEY_RE = re.compile(r"^ck_[a-f0-9]{48}$")
 
 RULES = [
     {
@@ -177,6 +190,7 @@ RULES = [
 DEFAULT_REGULATIONS = ["gdpr", "hipaa", "ccpa", "soc2", "ada"]
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = max(100_000, MAX_REQUEST_BYTES)
 
 
 def now_iso() -> str:
@@ -233,6 +247,90 @@ def init_db() -> None:
             )
             """
         )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rate_limits (
+                scope TEXT NOT NULL,
+                bucket TEXT NOT NULL,
+                window_start INTEGER NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (scope, bucket, window_start)
+            )
+            """
+        )
+        c.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_window ON rate_limits(window_start)")
+
+
+def parse_allowed_origins() -> set[str]:
+    allowed: set[str] = set()
+    if CORS_ALLOW_ORIGINS_RAW:
+        for part in CORS_ALLOW_ORIGINS_RAW.split(","):
+            origin = part.strip()
+            if origin:
+                allowed.add(origin.rstrip("/"))
+    if PUBLIC_BASE_URL:
+        parsed = urllib.parse.urlparse(PUBLIC_BASE_URL)
+        if parsed.scheme and parsed.netloc:
+            allowed.add(f"{parsed.scheme}://{parsed.netloc}")
+    return allowed
+
+
+ALLOWED_ORIGINS = parse_allowed_origins()
+
+
+def origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        return False
+    return origin.rstrip("/") in ALLOWED_ORIGINS
+
+
+def client_ip() -> str:
+    for header in ("CF-Connecting-IP", "X-Real-IP", "X-Forwarded-For"):
+        raw = request.headers.get(header, "").strip()
+        if not raw:
+            continue
+        if header == "X-Forwarded-For":
+            return raw.split(",")[0].strip()
+        return raw
+    return (request.remote_addr or "unknown").strip() or "unknown"
+
+
+def bucketize(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
+def check_rate_limit(scope: str, bucket: str, limit: int, window_seconds: int | None = None) -> tuple[bool, int]:
+    if limit <= 0:
+        return True, 0
+    window = max(1, window_seconds or RATE_LIMIT_WINDOW_SECONDS)
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    start = now_ts - (now_ts % window)
+    retry_after = max(1, window - (now_ts - start))
+    now = now_iso()
+
+    with conn() as c:
+        c.execute(
+            """
+            INSERT INTO rate_limits (scope, bucket, window_start, count, updated_at)
+            VALUES (?, ?, ?, 1, ?)
+            ON CONFLICT(scope, bucket, window_start)
+            DO UPDATE SET count = count + 1, updated_at = excluded.updated_at
+            """,
+            (scope, bucket, start, now),
+        )
+        row = c.execute(
+            """
+            SELECT count FROM rate_limits
+            WHERE scope = ? AND bucket = ? AND window_start = ?
+            """,
+            (scope, bucket, start),
+        ).fetchone()
+        if now_ts % 23 == 0:
+            c.execute("DELETE FROM rate_limits WHERE window_start < ?", (start - (window * 10),))
+
+    current = int(row["count"]) if row else 1
+    return current <= limit, retry_after
 
 
 def parse_payload() -> dict[str, Any]:
@@ -345,7 +443,25 @@ def send_followup_email(to_email: str, subject: str, html_body: str) -> bool:
         return False
 
 
+def runtime_error_response(err: RuntimeError) -> Response:
+    msg = str(err)
+    if msg.startswith("rate_limit_exceeded:"):
+        retry_after = msg.split(":", 1)[1].strip() or "60"
+        resp = jsonify({"detail": "rate_limit_exceeded"})
+        resp.status_code = 429
+        resp.headers["Retry-After"] = retry_after
+        return resp
+    resp = jsonify({"detail": msg})
+    resp.status_code = 429
+    return resp
+
+
 def require_api_key() -> dict[str, Any]:
+    ip = client_ip()
+    ip_ok, ip_retry = check_rate_limit("api_ip", bucketize(ip), API_RATE_LIMIT_PER_IP_PER_MINUTE)
+    if not ip_ok:
+        raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+
     auth = request.headers.get("Authorization", "")
     x_api_key = request.headers.get("X-API-Key", "")
     api_key = ""
@@ -357,6 +473,12 @@ def require_api_key() -> dict[str, Any]:
 
     if not api_key:
         raise PermissionError("API key required")
+    if not API_KEY_RE.match(api_key):
+        raise PermissionError("Invalid API key")
+
+    key_ok, key_retry = check_rate_limit("api_key", bucketize(api_key), API_RATE_LIMIT_PER_KEY_PER_MINUTE)
+    if not key_ok:
+        raise RuntimeError(f"rate_limit_exceeded:{key_retry}")
 
     record = reset_usage_if_needed(api_key)
     if not record:
@@ -583,11 +705,46 @@ def render_landing(filename: str) -> str:
     )
 
 
+@app.before_request
+def handle_preflight() -> Response | None:
+    if request.method != "OPTIONS":
+        return None
+    resp = Response(status=204)
+    return resp
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_payload_too_large(_: RequestEntityTooLarge) -> Response:
+    return jsonify({"detail": "payload_too_large"}), 413
+
+
 @app.after_request
 def after_request(resp: Response):
-    resp.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("Origin")
+    if origin_allowed(origin):
+        resp.headers["Access-Control-Allow-Origin"] = origin.rstrip("/")
+        resp.headers["Vary"] = "Origin"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization,X-API-Key"
     resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    resp.headers["X-XSS-Protection"] = "0"
+    if request.is_secure:
+        resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    if resp.mimetype == "text/html":
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "img-src 'self' data: https:; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com data:; "
+            "script-src 'self' 'unsafe-inline'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self' https://buy.stripe.com"
+        )
     return resp
 
 
@@ -647,6 +804,8 @@ def openapi_spec() -> Response:
                         "api_key": {"type": "string"},
                         "plan": {"type": "string"},
                         "checks_per_month": {"type": "integer"},
+                        "status": {"type": "string"},
+                        "message": {"type": "string"},
                     },
                 },
                 "CheckRequest": {
@@ -914,20 +1073,37 @@ def openapi_spec() -> Response:
 @app.route("/api/signup", methods=["POST"])
 def signup() -> Response:
     try:
+        ip_ok, ip_retry = check_rate_limit("signup_ip", bucketize(client_ip()), SIGNUP_RATE_LIMIT_PER_MINUTE)
+        if not ip_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+
         payload = parse_payload()
         email = clean_text(payload.get("email"), max_len=255).lower()
         if not EMAIL_RE.match(email):
             return jsonify({"detail": "Valid email required"}), 400
+        email_ok, email_retry = check_rate_limit("signup_email", bucketize(email), max(3, SIGNUP_RATE_LIMIT_PER_MINUTE))
+        if not email_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{email_retry}")
 
         with conn() as c:
             existing = c.execute("SELECT api_key, plan FROM api_keys WHERE email = ?", (email,)).fetchone()
 
         if existing:
+            if RESEND_API_KEY:
+                send_followup_email(
+                    email,
+                    "Your CheckAPI key",
+                    (
+                        f"<h2>CheckAPI Access</h2>"
+                        f"<p>API key: <code>{existing['api_key']}</code></p>"
+                        f"<p>Current plan: {existing['plan']}</p>"
+                        f"<p>Use Authorization header: <code>Bearer YOUR_API_KEY</code></p>"
+                    ),
+                )
             return jsonify(
                 {
-                    "api_key": existing["api_key"],
-                    "plan": existing["plan"],
-                    "checks_per_month": PLAN_LIMITS.get(existing["plan"], PLAN_LIMITS["free"])["checks_per_month"],
+                    "status": "accepted",
+                    "message": "If this email is registered, API key details have been sent to its inbox.",
                 }
             )
 
@@ -951,9 +1127,18 @@ def signup() -> Response:
                 f"<p><b>Email:</b> {email}</p><p><b>Plan:</b> free</p>",
             )
 
-        return jsonify({"api_key": api_key, "plan": "free", "checks_per_month": 500})
+        if SIGNUP_EXPOSE_API_KEY_ON_CREATE:
+            return jsonify({"api_key": api_key, "plan": "free", "checks_per_month": 500})
+        return jsonify(
+            {
+                "status": "accepted",
+                "message": "API key created. Check your inbox for the key.",
+            }
+        )
     except ValueError as e:
         return jsonify({"detail": str(e)}), 400
+    except RuntimeError as e:
+        return runtime_error_response(e)
 
 
 @app.route("/v1/usage", methods=["GET"])
@@ -963,7 +1148,7 @@ def usage() -> Response:
     except PermissionError as e:
         return jsonify({"detail": str(e)}), 401
     except RuntimeError as e:
-        return jsonify({"detail": str(e)}), 429
+        return runtime_error_response(e)
 
     plan = str(record.get("plan", "free")).lower()
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
@@ -992,7 +1177,7 @@ def check_endpoint() -> Response:
     except PermissionError as e:
         return jsonify({"detail": str(e)}), 401
     except RuntimeError as e:
-        return jsonify({"detail": str(e)}), 429
+        return runtime_error_response(e)
     except ValueError as e:
         return jsonify({"detail": str(e)}), 400
 
@@ -1041,7 +1226,7 @@ def batch_endpoint() -> Response:
     except PermissionError as e:
         return jsonify({"detail": str(e)}), 401
     except RuntimeError as e:
-        return jsonify({"detail": str(e)}), 429
+        return runtime_error_response(e)
     except ValueError as e:
         return jsonify({"detail": str(e)}), 400
 
@@ -1060,7 +1245,10 @@ def mcp_transport() -> Response:
     except PermissionError as e:
         return jsonify({"jsonrpc": "2.0", "error": {"code": -32001, "message": str(e)}, "id": None}), 401
     except RuntimeError as e:
-        return jsonify({"jsonrpc": "2.0", "error": {"code": -32002, "message": str(e)}, "id": None}), 429
+        msg = str(e)
+        if msg.startswith("rate_limit_exceeded:"):
+            return jsonify({"jsonrpc": "2.0", "error": {"code": -32003, "message": "rate_limit_exceeded"}, "id": None}), 429
+        return jsonify({"jsonrpc": "2.0", "error": {"code": -32002, "message": msg}, "id": None}), 429
 
     payload = request.get_json(silent=True) or {}
     method = payload.get("method")
@@ -1166,11 +1354,18 @@ def create_checkout() -> Response:
         return jsonify({"detail": "Stripe not configured"}), 503
 
     try:
+        ip_ok, ip_retry = check_rate_limit("checkout_ip", bucketize(client_ip()), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+        if not ip_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+
         payload = parse_payload()
         email = clean_text(payload.get("email"), max_len=255).lower()
         plan = clean_text(payload.get("plan"), max_len=20).lower()
         if not EMAIL_RE.match(email):
             raise ValueError("Valid email required")
+        email_ok, email_retry = check_rate_limit("checkout_email", bucketize(email), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+        if not email_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{email_retry}")
         if plan not in {"starter", "pro", "scale"}:
             raise ValueError("Invalid plan")
 
@@ -1202,6 +1397,8 @@ def create_checkout() -> Response:
         return jsonify({"checkout_url": session.url, "session_id": session.id})
     except ValueError as e:
         return jsonify({"detail": str(e)}), 400
+    except RuntimeError as e:
+        return runtime_error_response(e)
     except stripe.StripeError as e:  # type: ignore[union-attr]
         return jsonify({"detail": str(e)}), 400
 
@@ -1210,6 +1407,13 @@ def create_checkout() -> Response:
 def stripe_webhook() -> Response:
     if not stripe or not STRIPE_WEBHOOK_SECRET:
         return jsonify({"detail": "Webhook not configured"}), 503
+
+    ip_ok, ip_retry = check_rate_limit("webhook_ip", bucketize(client_ip()), WEBHOOK_RATE_LIMIT_PER_MINUTE)
+    if not ip_ok:
+        resp = jsonify({"detail": "rate_limit_exceeded"})
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(ip_retry)
+        return resp
 
     payload = request.get_data()
     sig = request.headers.get("stripe-signature", "")
@@ -1283,6 +1487,12 @@ def stripe_webhook() -> Response:
 def verify_session() -> Response:
     if not stripe or not STRIPE_SECRET_KEY:
         return jsonify({"verified": False, "reason": "Payments not configured"}), 503
+    ip_ok, ip_retry = check_rate_limit("verify_session_ip", bucketize(client_ip()), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+    if not ip_ok:
+        resp = jsonify({"verified": False, "reason": "rate_limit_exceeded"})
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(ip_retry)
+        return resp
 
     session_id = clean_text(request.args.get("session_id"), max_len=255)
     if not session_id:

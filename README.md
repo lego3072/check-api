@@ -27,7 +27,7 @@ Returns structured JSON with:
 
 ## API surface
 
-- `POST /api/signup` - create or fetch free API key (500 checks/mo)
+- `POST /api/signup` - create free API key (500 checks/mo)
 - `POST /v1/check` - single compliance check
 - `POST /v1/batch` - batch compliance checks
 - `GET /v1/usage` - plan + monthly usage
@@ -74,12 +74,21 @@ Set variables (example):
 
 ```bash
 railway variable set PUBLIC_BASE_URL="https://checkapi.dev" --service check-api
+railway variable set CORS_ALLOW_ORIGINS="https://checkapi.dev" --service check-api
 railway variable set PUBLIC_DOCS_ENABLED="true" --service check-api
 railway variable set PUBLIC_DISCOVERY_ENABLED="true" --service check-api
 railway variable set RESEND_API_KEY="re_..." --service check-api
 railway variable set FOLLOWUP_INBOX_EMAIL="joseph@dataweaveai.com" --service check-api
 railway variable set FOLLOWUP_FROM_EMAIL="CheckAPI <noreply@checkapi.dev>" --service check-api
 railway variable set SELF_SERVE_CHECKOUT_ENABLED="true" --service check-api
+railway variable set SIGNUP_EXPOSE_API_KEY_ON_CREATE="true" --service check-api
+railway variable set MAX_REQUEST_BYTES="1200000" --service check-api
+railway variable set RATE_LIMIT_WINDOW_SECONDS="60" --service check-api
+railway variable set SIGNUP_RATE_LIMIT_PER_MINUTE="8" --service check-api
+railway variable set CHECKOUT_RATE_LIMIT_PER_MINUTE="20" --service check-api
+railway variable set WEBHOOK_RATE_LIMIT_PER_MINUTE="120" --service check-api
+railway variable set API_RATE_LIMIT_PER_KEY_PER_MINUTE="240" --service check-api
+railway variable set API_RATE_LIMIT_PER_IP_PER_MINUTE="360" --service check-api
 railway variable set STRIPE_SECRET_KEY="sk_live_..." --service check-api
 railway variable set STRIPE_WEBHOOK_SECRET="whsec_..." --service check-api
 railway variable set STRIPE_STARTER_MONTHLY="price_..." --service check-api
@@ -90,6 +99,14 @@ railway variable set STARTER_PAYMENT_LINK="https://buy.stripe.com/..." --service
 railway variable set PRO_PAYMENT_LINK="https://buy.stripe.com/..." --service check-api
 railway variable set SCALE_PAYMENT_LINK="https://buy.stripe.com/..." --service check-api
 ```
+
+## Security defaults
+
+- IP and API-key rate limits enabled on signup, check, batch, MCP, checkout, and webhook routes
+- Request body size limit enforced (`MAX_REQUEST_BYTES`)
+- Existing account API keys are not returned by `POST /api/signup`
+- CORS is restricted to `CORS_ALLOW_ORIGINS` / `PUBLIC_BASE_URL` (no wildcard)
+- Secure headers enabled (`CSP`, `HSTS`, `X-Frame-Options`, `nosniff`, `Permissions-Policy`)
 
 ## Suggested first registries to submit
 
