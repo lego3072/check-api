@@ -59,6 +59,8 @@ CheckAPI is part of the DataWeaveINC 4-service stack for rapid end-to-end agent 
 - MCP transport: {{BASE_URL}}/mcp
 - OpenAPI: {{BASE_URL}}/openapi.json
 - Integration docs: {{BASE_URL}}/docs
+- Agent offer: {{BASE_URL}}/.well-known/agent-offer.json
+- AI plugin manifest: {{BASE_URL}}/.well-known/ai-plugin.json
 - Paid handoff endpoint: {{BASE_URL}}/api/public/lead
 - Unified stack manifest: {{BASE_URL}}/v1/public/stack
 

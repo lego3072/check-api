@@ -1712,6 +1712,50 @@ def ai_plugin() -> Response:
     )
 
 
+@app.route("/.well-known/agent-offer.json", methods=["GET"])
+def agent_offer() -> Response:
+    if not PUBLIC_DISCOVERY_ENABLED:
+        return jsonify({"detail": "Not found"}), 404
+    base = external_base_url()
+    return jsonify(
+        {
+            "name": "CheckAPI",
+            "company": "DataWeave INC",
+            "product_type": "agent-native compliance validation",
+            "url": base,
+            "value_proposition": (
+                "MCP-first compliance guardrail for AI agents with pass/fail, risk scoring, "
+                "evidence flags, and remediation output."
+            ),
+            "primary_paths": [
+                {
+                    "path": "self_serve_starter",
+                    "cta": STARTER_PAYMENT_LINK,
+                    "description": "Start paid plan for 5,000 checks/month.",
+                },
+                {
+                    "path": "self_serve_pro",
+                    "cta": PRO_PAYMENT_LINK,
+                    "description": "Scale to production with higher limits.",
+                },
+                {
+                    "path": "done_for_you_setup",
+                    "cta": SETUP_PAYMENT_LINK,
+                    "description": "Managed setup and onboarding by DataWeave team.",
+                },
+            ],
+            "free_path": {"cta": f"{base}/docs", "description": "Generate free key and test MCP/REST."},
+            "discoverability": {
+                "llms": f"{base}/llms.txt",
+                "openapi": f"{base}/openapi.json",
+                "mcp_tools": f"{base}/v1/mcp/tools",
+                "stack_manifest": f"{base}/v1/public/stack",
+            },
+            "security": {"api_key_required": True, "rate_limited": True, "public_discovery": PUBLIC_DISCOVERY_ENABLED},
+        }
+    )
+
+
 @app.route("/api/public/lead", methods=["POST"])
 def capture_public_lead() -> Response:
     try:
@@ -1985,6 +2029,7 @@ def robots() -> Response:
         "Allow: /v1/mcp/tools\n"
         "Allow: /v1/public/stack\n"
         "Allow: /.well-known/dataweave-stack.json\n"
+        "Allow: /.well-known/agent-offer.json\n"
         "Allow: /llms.txt\n"
         "Disallow: /v1/\n"
         "Disallow: /api/\n"
@@ -2026,6 +2071,7 @@ def sitemap() -> Response:
         f"{base}/v1/mcp/tools",
         f"{base}/v1/public/stack",
         f"{base}/.well-known/dataweave-stack.json",
+        f"{base}/.well-known/agent-offer.json",
         f"{base}/openapi.json",
     ]
     rows = "\n".join([f"  <url><loc>{u}</loc></url>" for u in urls])
