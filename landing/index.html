@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CheckAPI | Agent-Native Compliance Guardrail MCP Server</title>
   <meta name="description" content="CheckAPI is an MCP-first compliance validation server for AI agents. Validate outputs against GDPR, HIPAA, CCPA, SOC2, ADA with pass/fail, risk score, and remediation." />
+  <meta name="keywords" content="MCP compliance server, AI agent compliance API, GDPR validation API, HIPAA guardrail API, CCPA SOC2 ADA checks, compliance middleware for agents, check_compliance tool" />
   <link rel="canonical" href="{{BASE_URL}}/" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
@@ -462,15 +463,14 @@
         <div class="code mono">GET /v1/mcp/tools
 POST /mcp</div>
         <div class="quick-box">
-          <label class="quick-label" for="quick-email">Start paid now (no sales call)</label>
-          <input id="quick-email" class="quick-input" type="email" placeholder="you@company.com" autocomplete="email" />
+          <div class="quick-label">Start paid now (no sales call)</div>
           <div class="quick-actions">
             <button class="btn btn-primary" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Starter $29</button>
             <button class="btn btn-muted" data-plan="pro" data-fallback="{{PRO_PAYMENT_LINK}}">Pro $99</button>
             <button class="btn btn-muted" data-plan="scale" data-fallback="{{SCALE_PAYMENT_LINK}}">Scale $299</button>
             <button class="btn btn-muted" data-plan="setup" data-fallback="{{SETUP_PAYMENT_LINK}}">Done-For-You Setup</button>
           </div>
-          <div id="quick-note" class="quick-note">We prefill Stripe checkout and notify onboarding instantly.</div>
+          <div id="quick-note" class="quick-note">Direct Stripe checkout with no email prompt.</div>
         </div>
       </div>
     </section>
@@ -645,63 +645,16 @@ Authorization: Bearer ck_***</div>
   </main>
   <script>
   (function () {
-    const emailInput = document.getElementById("quick-email");
-    const note = document.getElementById("quick-note");
     const buttons = Array.from(document.querySelectorAll("[data-plan]"));
-
-    function setBusy(isBusy) {
-      buttons.forEach((btn) => { btn.disabled = isBusy; });
-    }
-
-    function getUtmParams() {
-      const q = new URLSearchParams(window.location.search);
-      return {
-        utm_source: q.get("utm_source") || "",
-        utm_medium: q.get("utm_medium") || "",
-        utm_campaign: q.get("utm_campaign") || "",
-        utm_content: q.get("utm_content") || "",
-        utm_term: q.get("utm_term") || ""
-      };
-    }
-
-    async function launch(plan, fallback) {
-      const email = (emailInput && emailInput.value || "").trim().toLowerCase();
-      if (!email) {
-        window.location.href = fallback;
-        return;
-      }
-      try {
-        setBusy(true);
-        note.textContent = "Preparing secure checkout...";
-        const body = {
-          email,
-          plan,
-          source: "homepage_quick_checkout",
-          ...getUtmParams()
-        };
-        const resp = await fetch("/api/public/lead", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.checkout_url) {
-          throw new Error(data.detail || "Checkout could not be created");
-        }
-        note.textContent = "Redirecting to Stripe...";
-        window.location.href = data.checkout_url;
-      } catch (err) {
-        note.textContent = "Could not start checkout. Opening direct Stripe link.";
-        window.location.href = fallback;
-      } finally {
-        setBusy(false);
-      }
-    }
 
     buttons.forEach((btn) => {
       btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        launch(btn.dataset.plan || "starter", btn.dataset.fallback || "{{STARTER_PAYMENT_LINK}}");
+        const fallback = btn.dataset.fallback || btn.getAttribute("href") || "{{STARTER_PAYMENT_LINK}}";
+        if (!fallback) return;
+        if (btn.tagName.toLowerCase() !== "a") {
+          e.preventDefault();
+          window.location.href = fallback;
+        }
       });
     });
   })();
