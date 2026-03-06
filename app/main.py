@@ -1795,6 +1795,7 @@ def agent_offer() -> Response:
                 "pro_usd_month": 99,
                 "scale_usd_month": 299,
                 "done_for_you_setup_usd": 2500,
+                "full_stack_starter_usd_month": 656,
             },
             "primary_paths": [
                 {

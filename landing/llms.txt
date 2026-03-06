@@ -29,6 +29,7 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - CheckAPI: {{BASE_URL}} (compliance validation, from $29/month)
 - Agent Router: {{AGENT_ROUTER_URL}} (intent routing + service transactions, from $499/month)
 - Bundle manifest: {{BASE_URL}}/v1/public/stack
+- Combined starter stack reference: $656/month
 
 ## Access + Pricing
 - Free tier: 500 checks/month
