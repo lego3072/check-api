@@ -206,6 +206,50 @@
       gap: 8px;
     }
 
+    .roi-proof {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(16, 42, 54, 0.72);
+    }
+
+    .roi-proof h3 {
+      margin: 0 0 6px;
+      font-size: 20px;
+    }
+
+    .roi-proof p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .roi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .roi-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.16);
+    }
+
+    .roi-card .n {
+      font-size: 27px;
+      line-height: 1;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .roi-card .l {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     .hero {
       padding: 74px 0 28px;
       display: grid;
@@ -448,7 +492,7 @@
     }
 
     @media (max-width: 640px) {
-      .cards, .steps, .pricing, .grid-2 { grid-template-columns: 1fr; }
+      .cards, .steps, .pricing, .grid-2, .roi-grid { grid-template-columns: 1fr; }
       .hero { padding-top: 44px; }
       .price { font-size: 30px; }
     }
@@ -478,8 +522,8 @@
         <span>Extract + Redact + Check + Agent Router in one implementation path built for faster cash flow.</span>
       </div>
       <div class="actions">
-        <a class="btn btn-primary" href="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}" target="_blank" rel="noreferrer">Start Bundle ($656/mo)</a>
-        <a class="btn btn-muted" href="{{AGENT_ROUTER_BUNDLE_FULL_URL}}" target="_blank" rel="noreferrer">Full Launch ($3,156)</a>
+        <a class="btn btn-primary" href="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}" target="_blank" rel="noreferrer">Start Bundle In Stripe</a>
+        <a class="btn btn-muted" href="{{AGENT_ROUTER_BUNDLE_FULL_URL}}" target="_blank" rel="noreferrer">Lock Full Launch In Stripe</a>
       </div>
     </section>
 
@@ -487,15 +531,15 @@
       <div>
         <div class="pill">First mover: Compliance category for MCP servers</div>
         <div class="bundle-pill">Bundle now: $656/mo, or full launch at $3,156 today then $656/mo</div>
-        <h1>Deploy agent compliance checks in minutes.</h1>
+        <h1>Block costly compliance misses before agents send final answers.</h1>
         <p>
           CheckAPI validates outputs against GDPR, HIPAA, CCPA, SOC2, and ADA,
           then returns pass/fail, risk scores, evidence, and remediation in structured JSON.
-          Built for agent builders who need a fast pre-response guardrail with no enterprise setup cycle.
+          Built for teams that need faster release velocity with lower compliance risk.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Start Starter ($29)</a>
-          <a class="btn btn-muted" href="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}" target="_blank" rel="noreferrer">Start 4-Tool Bundle ($656/mo)</a>
+          <a class="btn btn-primary" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Start Starter In Stripe ($29)</a>
+          <a class="btn btn-muted" href="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}" target="_blank" rel="noreferrer">Start 4-Tool Bundle In Stripe</a>
           <a class="btn btn-muted" href="/docs">View Docs / Free Key</a>
         </div>
         <div class="chip-row">
@@ -526,6 +570,25 @@ Authenticated runtime checks</div>
           </div>
           <div id="quick-note" class="quick-note">Direct Stripe checkout with no email prompt.</div>
         </div>
+      </div>
+    </section>
+
+    <section class="roi-proof">
+      <h3>ROI Proof For Fast-Close Buyers</h3>
+      <p>Example assumptions for purchase decisions. Actual outcomes vary by traffic, use-case, and risk profile.</p>
+      <div class="roi-grid">
+        <article class="roi-card">
+          <div class="n">$348/yr</div>
+          <div class="l">Starter annual cost at $29/month.</div>
+        </article>
+        <article class="roi-card">
+          <div class="n">$4,500/yr</div>
+          <div class="l">If teams avoid ~3 hours/month of manual review at $125/hr.</div>
+        </article>
+        <article class="roi-card">
+          <div class="n">12.9x</div>
+          <div class="l">Illustrative labor ROI vs Starter plan cost.</div>
+        </article>
       </div>
     </section>
 
