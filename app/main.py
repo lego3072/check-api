@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 from werkzeug.exceptions import RequestEntityTooLarge
 
 try:
@@ -452,6 +452,15 @@ def get_key_record(api_key: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def get_key_record_by_email(email: str) -> dict[str, Any] | None:
+    normalized = clean_text(email, max_len=255).lower()
+    if not EMAIL_RE.match(normalized):
+        return None
+    with conn() as c:
+        row = c.execute("SELECT * FROM api_keys WHERE email = ? ORDER BY id DESC LIMIT 1", (normalized,)).fetchone()
+    return dict(row) if row else None
+
+
 def create_api_key(email: str, plan: str = "free") -> str:
     key = "ck_" + secrets.token_hex(24)
     now = now_iso()
@@ -538,6 +547,46 @@ def payment_link_for_plan(plan: str) -> str:
     return mapping.get(plan, "")
 
 
+def plan_checkout_url(plan: str) -> str:
+    if (
+        stripe
+        and STRIPE_SECRET_KEY
+        and SELF_SERVE_CHECKOUT_ENABLED
+        and STRIPE_PRICE_IDS.get(plan)
+        and plan in {"starter", "pro", "scale"}
+    ):
+        return f"{external_base_url()}/api/checkout/start?plan={urllib.parse.quote(plan)}"
+    return payment_link_for_plan(plan)
+
+
+def infer_plan_from_checkout_session(session_obj: dict[str, Any]) -> str:
+    metadata_plan = (clean_text((session_obj.get("metadata") or {}).get("plan"), max_len=20) or "").lower()
+    if metadata_plan in STRIPE_PRICE_IDS:
+        return metadata_plan
+
+    price_to_plan = {v: k for k, v in STRIPE_PRICE_IDS.items() if v}
+    line_items = ((session_obj.get("line_items") or {}).get("data") or [])
+    for item in line_items:
+        price_id = ((item or {}).get("price") or {}).get("id")
+        mapped = price_to_plan.get(price_id)
+        if mapped:
+            return mapped
+
+    session_id = clean_text(session_obj.get("id"), max_len=255)
+    if session_id and stripe and STRIPE_SECRET_KEY:
+        try:
+            expanded = stripe.checkout.Session.retrieve(session_id, expand=["line_items.data.price"])
+            for item in ((expanded.get("line_items") or {}).get("data") or []):
+                price_id = ((item or {}).get("price") or {}).get("id")
+                mapped = price_to_plan.get(price_id)
+                if mapped:
+                    return mapped
+        except Exception:
+            pass
+
+    return "starter"
+
+
 def checkout_link_with_prefilled_email(base_link: str, email: str) -> str:
     if not base_link or not email:
         return base_link
@@ -585,7 +634,7 @@ def runtime_error_response(err: RuntimeError) -> Response:
         resp = jsonify(
             {
                 "detail": "free_tier_capacity_reached",
-                "upgrade_url": STARTER_PAYMENT_LINK,
+                "upgrade_url": plan_checkout_url("starter"),
                 "message": "Free-tier daily capacity is full. Upgrade for priority access.",
             }
         )
@@ -792,7 +841,7 @@ def maybe_send_upgrade_alert(key_record: dict[str, Any], used: int) -> None:
             (
                 f"<p>You have used <b>{used}/{limit}</b> free checks this month.</p>"
                 f"<p>Remaining: <b>{remaining}</b></p>"
-                f"<p>Upgrade now: <a href=\"{STARTER_PAYMENT_LINK}\">Start Starter</a></p>"
+                f"<p>Upgrade now: <a href=\"{plan_checkout_url('starter')}\">Start Starter</a></p>"
             ),
         )
     if FOLLOWUP_INBOX_EMAIL:
@@ -802,7 +851,7 @@ def maybe_send_upgrade_alert(key_record: dict[str, Any], used: int) -> None:
             (
                 f"<p><b>Email:</b> {email or 'n/a'}</p>"
                 f"<p><b>Usage:</b> {used}/{limit} ({int(pct)}%)</p>"
-                f"<p><b>Upgrade link:</b> <a href=\"{STARTER_PAYMENT_LINK}\">{STARTER_PAYMENT_LINK}</a></p>"
+                f"<p><b>Upgrade link:</b> <a href=\"{plan_checkout_url('starter')}\">{plan_checkout_url('starter')}</a></p>"
             ),
         )
 
@@ -936,9 +985,9 @@ def render_landing(filename: str) -> str:
         .replace("{{AGENT_ROUTER_BUNDLE_FULL_URL}}", AGENT_ROUTER_BUNDLE_FULL_URL)
         .replace("{{AGENT_ROUTER_BUNDLE_DASHBOARD_URL}}", AGENT_ROUTER_BUNDLE_DASHBOARD_URL)
         .replace("{{SETUP_PAYMENT_LINK}}", SETUP_PAYMENT_LINK)
-        .replace("{{STARTER_PAYMENT_LINK}}", STARTER_PAYMENT_LINK)
-        .replace("{{PRO_PAYMENT_LINK}}", PRO_PAYMENT_LINK)
-        .replace("{{SCALE_PAYMENT_LINK}}", SCALE_PAYMENT_LINK)
+        .replace("{{STARTER_PAYMENT_LINK}}", plan_checkout_url("starter"))
+        .replace("{{PRO_PAYMENT_LINK}}", plan_checkout_url("pro"))
+        .replace("{{SCALE_PAYMENT_LINK}}", plan_checkout_url("scale"))
     )
 
 
@@ -1054,6 +1103,118 @@ def home() -> Response:
     if html:
         return Response(html, mimetype="text/html")
     return Response("<h1>CheckAPI</h1>", mimetype="text/html")
+
+
+@app.route("/payment-success", methods=["GET"])
+def payment_success_page() -> Response:
+    session_id = clean_text(request.args.get("session_id"), max_len=255) or ""
+    base = external_base_url()
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CheckAPI | Payment Confirmation</title>
+  <meta name="description" content="Payment confirmation and activation steps for CheckAPI." />
+  <style>
+    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #020a16; color: #e2e8f0; }}
+    .wrap {{ max-width: 760px; margin: 24px auto; padding: 0 16px; }}
+    .card {{ background: #08162a; border: 1px solid #123258; border-radius: 12px; padding: 24px; }}
+    .status {{ font-weight: 700; margin: 8px 0 14px; color: #7dd3fc; }}
+    .actions {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }}
+    .btn {{ text-decoration: none; border-radius: 10px; padding: 10px 14px; font-weight: 700; display: inline-block; }}
+    .btn-primary {{ background: #1fd3ff; color: #07203b; }}
+    .btn-muted {{ border: 1px solid #1e4068; color: #d9efff; background: #0b1d34; }}
+    input {{ width: 100%; max-width: 360px; margin-top: 8px; border: 1px solid #20456e; border-radius: 8px; background: #061427; color: #d9efff; padding: 10px; }}
+    button {{ margin-top: 8px; border: 1px solid #20527f; background: #0b2947; color: #d9efff; border-radius: 8px; padding: 9px 12px; font-weight: 700; cursor: pointer; }}
+    small {{ color: #9bb7d8; }}
+    a {{ color: #54d1ff; }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Payment Received. Activation In Progress.</h1>
+      <p id="status-text" class="status">Verifying your Stripe session...</p>
+      <p id="detail-text">Session: <code>{session_id or "missing"}</code></p>
+      <p>After payment, your API key is sent to the checkout email automatically.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/docs">Open Docs</a>
+        <a class="btn btn-muted" href="/">Back to Home</a>
+      </div>
+      <hr style="border:0;border-top:1px solid #143456;margin:20px 0;" />
+      <h3 style="margin:0 0 8px;">Did not receive your key email?</h3>
+      <p><small>Use this to resend key + activation details.</small></p>
+      <input type="email" id="recover-email" placeholder="you@company.com" />
+      <br />
+      <button type="button" id="recover-btn">Resend Access Email</button>
+      <p id="recover-note"><small></small></p>
+    </div>
+  </div>
+  <script>
+    (function () {{
+      const sessionId = {json.dumps(session_id)};
+      const base = {json.dumps(base)};
+      const statusEl = document.getElementById("status-text");
+      const detailEl = document.getElementById("detail-text");
+      const emailInput = document.getElementById("recover-email");
+      const recoverBtn = document.getElementById("recover-btn");
+      const recoverNote = document.getElementById("recover-note");
+
+      async function verify() {{
+        if (!sessionId) {{
+          statusEl.textContent = "Missing session ID. Use your checkout success link or request access email resend below.";
+          return;
+        }}
+        try {{
+          const res = await fetch(`${{base}}/api/billing/verify-session?session_id=${{encodeURIComponent(sessionId)}}`, {{ cache: "no-store" }});
+          const data = await res.json();
+          if (data.verified) {{
+            statusEl.textContent = `Payment confirmed for plan: ${{data.plan || "starter"}}`;
+            const email = data.email || "";
+            if (email) {{
+              detailEl.textContent = `Activation email sent to: ${{email}}`;
+              emailInput.value = email;
+            }} else {{
+              detailEl.textContent = "Payment confirmed. API key email will be sent to checkout email.";
+            }}
+          }} else {{
+            statusEl.textContent = "Payment not confirmed yet. Refresh in 30 seconds.";
+            detailEl.textContent = data.reason ? `Status: ${{data.reason}}` : "Waiting for Stripe confirmation.";
+          }}
+        }} catch (err) {{
+          statusEl.textContent = "Unable to verify payment right now. You can still request key resend below.";
+        }}
+      }}
+
+      recoverBtn.addEventListener("click", async () => {{
+        const email = (emailInput.value || "").trim();
+        if (!email || !email.includes("@")) {{
+          recoverNote.innerHTML = "<small>Enter a valid email first.</small>";
+          return;
+        }}
+        recoverBtn.disabled = true;
+        recoverNote.innerHTML = "<small>Sending...</small>";
+        try {{
+          await fetch(`${{base}}/api/access/resend-key`, {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{ email }})
+          }});
+          recoverNote.innerHTML = "<small>If this email exists, access details were sent.</small>";
+        }} catch (_) {{
+          recoverNote.innerHTML = "<small>Unable to send right now. Try again in a minute.</small>";
+        }} finally {{
+          recoverBtn.disabled = false;
+        }}
+      }});
+
+      verify();
+    }})();
+  </script>
+</body>
+</html>"""
+    return Response(html, mimetype="text/html")
 
 
 @app.route("/docs", methods=["GET"])
@@ -1550,7 +1711,7 @@ def signup() -> Response:
                 f"<h2>CheckAPI Free Tier Enabled</h2>"
                 f"<p>API key: <code>{api_key}</code></p>"
                 f"<p>Free plan includes 500 checks/month.</p>"
-                f"<p>Upgrade: <a href=\"{STARTER_PAYMENT_LINK}\">Starter</a></p>"
+                f"<p>Upgrade: <a href=\"{plan_checkout_url('starter')}\">Starter</a></p>"
             ),
         )
 
@@ -1602,7 +1763,7 @@ def usage() -> Response:
             "batch_limit": limits["batch_limit"],
             "billing_period": record.get("month_reset") or month_key(),
             "upgrade_recommended": plan == "free" and usage_pct >= 70,
-            "upgrade_url": STARTER_PAYMENT_LINK if plan == "free" else "",
+            "upgrade_url": plan_checkout_url("starter") if plan == "free" else "",
         }
     )
 
@@ -1762,7 +1923,7 @@ def mcp_transport() -> Response:
                 "max_chars": limits["max_chars"],
                 "batch_limit": limits["batch_limit"],
                 "upgrade_recommended": plan == "free" and usage_pct >= 70,
-                "upgrade_url": STARTER_PAYMENT_LINK if plan == "free" else "",
+                "upgrade_url": plan_checkout_url("starter") if plan == "free" else "",
             }
             return jsonify({"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": json.dumps(usage_payload)}]}})
 
@@ -1819,12 +1980,12 @@ def agent_offer() -> Response:
             "primary_paths": [
                 {
                     "path": "self_serve_starter",
-                    "cta": STARTER_PAYMENT_LINK,
+                    "cta": plan_checkout_url("starter"),
                     "description": "Start paid plan for 5,000 checks/month.",
                 },
                 {
                     "path": "self_serve_pro",
-                    "cta": PRO_PAYMENT_LINK,
+                    "cta": plan_checkout_url("pro"),
                     "description": "Scale to production with higher limits.",
                 },
                 {
@@ -1945,7 +2106,7 @@ def create_checkout() -> Response:
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
             customer_email=email,
-            success_url=f"{external_base_url()}/?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
+            success_url=f"{external_base_url()}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{external_base_url()}/?checkout=cancelled",
             metadata={"email": email, "plan": plan, "product": "checkapi"},
         )
@@ -1962,6 +2123,44 @@ def create_checkout() -> Response:
             )
 
         return jsonify({"checkout_url": session.url, "session_id": session.id})
+    except ValueError as e:
+        return jsonify({"detail": str(e)}), 400
+    except RuntimeError as e:
+        return runtime_error_response(e)
+    except stripe.StripeError as e:  # type: ignore[union-attr]
+        return jsonify({"detail": str(e)}), 400
+
+
+@app.route("/api/checkout/start", methods=["GET"])
+def checkout_start() -> Response:
+    if not SELF_SERVE_CHECKOUT_ENABLED:
+        return jsonify({"detail": "Self-serve checkout disabled"}), 403
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"detail": "Stripe not configured"}), 503
+
+    try:
+        ip_ok, ip_retry = check_rate_limit("checkout_start_ip", bucketize(client_ip()), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+        if not ip_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+
+        plan = clean_text(request.args.get("plan"), max_len=20).lower()
+        if plan not in {"starter", "pro", "scale"}:
+            raise ValueError("Invalid plan")
+
+        price_id = STRIPE_PRICE_IDS.get(plan)
+        if not price_id:
+            raise ValueError("Plan not configured")
+
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=f"{external_base_url()}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{external_base_url()}/?checkout=cancelled",
+            metadata={"plan": plan, "product": "checkapi", "source": "checkout_start"},
+            allow_promotion_codes=True,
+        )
+        return redirect(session.url, code=303)
     except ValueError as e:
         return jsonify({"detail": str(e)}), 400
     except RuntimeError as e:
@@ -1995,13 +2194,20 @@ def stripe_webhook() -> Response:
     if event_type == "checkout.session.completed":
         session = event.get("data", {}).get("object", {})
         session_id = session.get("id", "")
-        email = (session.get("customer_email") or session.get("metadata", {}).get("email") or "").lower()
-        plan = (session.get("metadata", {}).get("plan") or "starter").lower()
+        email = (
+            session.get("customer_email")
+            or (session.get("customer_details") or {}).get("email")
+            or (session.get("metadata") or {}).get("email")
+            or ""
+        ).lower()
+        plan = infer_plan_from_checkout_session(session)
 
         if email:
             with conn() as c:
                 existing = c.execute("SELECT api_key FROM api_keys WHERE email = ?", (email,)).fetchone()
+            api_key = ""
             if existing:
+                api_key = str(existing["api_key"])
                 with conn() as c:
                     c.execute(
                         """
@@ -2013,6 +2219,7 @@ def stripe_webhook() -> Response:
                     )
             else:
                 key = create_api_key(email, plan)
+                api_key = key
                 with conn() as c:
                     c.execute(
                         """
@@ -2034,6 +2241,18 @@ def stripe_webhook() -> Response:
                         f"<p><b>Plan:</b> {plan}</p>"
                         f"<p><b>Amount:</b> {amount_txt}</p>"
                         f"<p><b>Session ID:</b> {session_id}</p>"
+                    ),
+                )
+            if session_id and mark_notification_sent(session_id, "access_delivery") and api_key:
+                send_followup_email(
+                    email,
+                    "Your CheckAPI access is active",
+                    (
+                        f"<h2>CheckAPI Plan Activated</h2>"
+                        f"<p><b>Plan:</b> {plan}</p>"
+                        f"<p><b>API Key:</b> <code>{api_key}</code></p>"
+                        f"<p>Docs: <a href=\"{external_base_url()}/docs\">{external_base_url()}/docs</a></p>"
+                        f"<p>Usage: <a href=\"{external_base_url()}/v1/usage\">{external_base_url()}/v1/usage</a></p>"
                     ),
                 )
 
@@ -2071,13 +2290,43 @@ def verify_session() -> Response:
             return jsonify(
                 {
                     "verified": True,
-                    "plan": (session.get("metadata", {}) or {}).get("plan", "starter"),
-                    "email": session.get("customer_email"),
+                    "plan": infer_plan_from_checkout_session(session),
+                    "email": session.get("customer_email") or (session.get("customer_details") or {}).get("email"),
                 }
             )
         return jsonify({"verified": False, "reason": "Payment not completed"})
     except stripe.StripeError:
         return jsonify({"verified": False, "reason": "Payment verification failed"})
+
+
+@app.route("/api/access/resend-key", methods=["POST"])
+def resend_access_key() -> Response:
+    try:
+        ip_ok, ip_retry = check_rate_limit("resend_access_ip", bucketize(client_ip()), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+        if not ip_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+
+        payload = parse_payload()
+        email = clean_text(payload.get("email"), max_len=255).lower()
+        if not EMAIL_RE.match(email):
+            raise ValueError("Valid email required")
+        record = get_key_record_by_email(email)
+        if record and RESEND_API_KEY:
+            send_followup_email(
+                email,
+                "Your CheckAPI key details",
+                (
+                    f"<h2>CheckAPI Access</h2>"
+                    f"<p><b>Plan:</b> {record.get('plan', 'free')}</p>"
+                    f"<p><b>API Key:</b> <code>{record.get('api_key')}</code></p>"
+                    f"<p>Docs: <a href=\"{external_base_url()}/docs\">{external_base_url()}/docs</a></p>"
+                ),
+            )
+        return jsonify({"status": "accepted"})
+    except ValueError as e:
+        return jsonify({"detail": str(e)}), 400
+    except RuntimeError as e:
+        return runtime_error_response(e)
 
 
 @app.route("/v1/public/stack", methods=["GET"])
@@ -2102,9 +2351,9 @@ def public_config() -> Response:
             "base_url": external_base_url(),
             "payment_ready": not STARTER_PAYMENT_LINK.startswith("https://buy.stripe.com/replace"),
             "setup_payment_link": SETUP_PAYMENT_LINK,
-            "starter_payment_link": STARTER_PAYMENT_LINK,
-            "pro_payment_link": PRO_PAYMENT_LINK,
-            "scale_payment_link": SCALE_PAYMENT_LINK,
+            "starter_payment_link": plan_checkout_url("starter"),
+            "pro_payment_link": plan_checkout_url("pro"),
+            "scale_payment_link": plan_checkout_url("scale"),
             "stack_manifest": external_base_url() + "/v1/public/stack",
             "stack_services": {
                 "dataweave_home": DATAWEAVE_HOME_URL,
