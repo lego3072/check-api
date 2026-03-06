@@ -47,6 +47,7 @@ def env_int(name: str, default: int) -> int:
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
 PUBLIC_DOCS_ENABLED = env_bool("PUBLIC_DOCS_ENABLED", True)
 PUBLIC_DISCOVERY_ENABLED = env_bool("PUBLIC_DISCOVERY_ENABLED", True)
+PUBLIC_MCP_TOOLS_ENABLED = env_bool("PUBLIC_MCP_TOOLS_ENABLED", False)
 INDEXNOW_KEY = os.getenv("INDEXNOW_KEY", "").strip()
 CORS_ALLOW_ORIGINS_RAW = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
 
@@ -1161,30 +1162,35 @@ def payment_success_page() -> Response:
       const recoverBtn = document.getElementById("recover-btn");
       const recoverNote = document.getElementById("recover-note");
 
-      async function verify() {{
+      async function verify(maxAttempts = 12) {{
         if (!sessionId) {{
           statusEl.textContent = "Missing session ID. Use your checkout success link or request access email resend below.";
           return;
         }}
-        try {{
-          const res = await fetch(`${{base}}/api/billing/verify-session?session_id=${{encodeURIComponent(sessionId)}}`, {{ cache: "no-store" }});
-          const data = await res.json();
-          if (data.verified) {{
-            statusEl.textContent = `Payment confirmed for plan: ${{data.plan || "starter"}}`;
-            const email = data.email || "";
-            if (email) {{
-              detailEl.textContent = `Activation email sent to: ${{email}}`;
-              emailInput.value = email;
-            }} else {{
-              detailEl.textContent = "Payment confirmed. API key email will be sent to checkout email.";
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {{
+          try {{
+            const res = await fetch(`${{base}}/api/billing/verify-session?session_id=${{encodeURIComponent(sessionId)}}`, {{ cache: "no-store" }});
+            const data = await res.json();
+            if (data.verified) {{
+              statusEl.textContent = `Payment confirmed for plan: ${{data.plan || "starter"}}`;
+              const email = data.email || "";
+              if (email) {{
+                detailEl.textContent = `Activation email sent to: ${{email}}`;
+                emailInput.value = email;
+              }} else {{
+                detailEl.textContent = "Payment confirmed. API key email will be sent to checkout email.";
+              }}
+              return;
             }}
-          }} else {{
-            statusEl.textContent = "Payment not confirmed yet. Refresh in 30 seconds.";
+            statusEl.textContent = `Payment pending... auto-check ${{attempt}}/${{maxAttempts}}`;
             detailEl.textContent = data.reason ? `Status: ${{data.reason}}` : "Waiting for Stripe confirmation.";
+          }} catch (err) {{
+            statusEl.textContent = "Unable to verify payment right now. You can still request key resend below.";
+            return;
           }}
-        }} catch (err) {{
-          statusEl.textContent = "Unable to verify payment right now. You can still request key resend below.";
+          await new Promise((resolve) => setTimeout(resolve, 5000));
         }}
+        statusEl.textContent = "Payment not confirmed yet. Refresh in 30 seconds.";
       }}
 
       recoverBtn.addEventListener("click", async () => {{
@@ -1834,7 +1840,7 @@ def batch_endpoint() -> Response:
 
 @app.route("/v1/mcp/tools", methods=["GET"])
 def mcp_tools() -> Response:
-    if not PUBLIC_DOCS_ENABLED:
+    if not PUBLIC_MCP_TOOLS_ENABLED:
         return jsonify({"detail": "Not found"}), 404
     return jsonify({"tools": tool_definitions()})
 
@@ -2287,11 +2293,58 @@ def verify_session() -> Response:
     try:
         session = stripe.checkout.Session.retrieve(session_id)
         if session.get("payment_status") == "paid":
+            email = (
+                session.get("customer_email")
+                or (session.get("customer_details") or {}).get("email")
+                or (session.get("metadata") or {}).get("email")
+                or ""
+            ).lower()
+            plan = infer_plan_from_checkout_session(session)
+
+            api_key = ""
+            if email and EMAIL_RE.match(email):
+                existing = get_key_record_by_email(email)
+                if existing:
+                    api_key = str(existing.get("api_key") or "")
+                    with conn() as c:
+                        c.execute(
+                            """
+                            UPDATE api_keys
+                            SET plan = ?, stripe_customer_id = ?, stripe_subscription_id = ?, updated_at = ?
+                            WHERE email = ?
+                            """,
+                            (plan, session.get("customer"), session.get("subscription"), now_iso(), email),
+                        )
+                else:
+                    api_key = create_api_key(email, plan)
+                    with conn() as c:
+                        c.execute(
+                            """
+                            UPDATE api_keys
+                            SET stripe_customer_id = ?, stripe_subscription_id = ?, updated_at = ?
+                            WHERE api_key = ?
+                            """,
+                            (session.get("customer"), session.get("subscription"), now_iso(), api_key),
+                        )
+
+                if mark_notification_sent(session_id, "access_delivery_verify") and api_key and RESEND_API_KEY:
+                    send_followup_email(
+                        email,
+                        "Your CheckAPI access is active",
+                        (
+                            f"<h2>CheckAPI Plan Activated</h2>"
+                            f"<p><b>Plan:</b> {plan}</p>"
+                            f"<p><b>API Key:</b> <code>{api_key}</code></p>"
+                            f"<p>Docs: <a href=\"{external_base_url()}/docs\">{external_base_url()}/docs</a></p>"
+                            f"<p>Usage: <a href=\"{external_base_url()}/v1/usage\">{external_base_url()}/v1/usage</a></p>"
+                        ),
+                    )
+
             return jsonify(
                 {
                     "verified": True,
-                    "plan": infer_plan_from_checkout_session(session),
-                    "email": session.get("customer_email") or (session.get("customer_details") or {}).get("email"),
+                    "plan": plan,
+                    "email": email or None,
                 }
             )
         return jsonify({"verified": False, "reason": "Payment not completed"})
