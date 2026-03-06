@@ -77,6 +77,10 @@ API_RATE_LIMIT_PER_KEY_PER_MINUTE = env_int("API_RATE_LIMIT_PER_KEY_PER_MINUTE",
 API_RATE_LIMIT_PER_IP_PER_MINUTE = env_int("API_RATE_LIMIT_PER_IP_PER_MINUTE", 360)
 RATE_LIMIT_WINDOW_SECONDS = env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
 
+FREE_SIGNUPS_PER_IP_PER_DAY = env_int("FREE_SIGNUPS_PER_IP_PER_DAY", 8)
+GLOBAL_DAILY_CHECK_CAP = env_int("GLOBAL_DAILY_CHECK_CAP", 30000)
+FREE_TIER_DAILY_CHECK_CAP = env_int("FREE_TIER_DAILY_CHECK_CAP", 8000)
+
 if stripe and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -232,6 +236,8 @@ def init_db() -> None:
                 severity TEXT NOT NULL,
                 flag_count INTEGER NOT NULL,
                 content_type TEXT,
+                plan TEXT NOT NULL DEFAULT 'free',
+                char_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )
             """
@@ -267,6 +273,18 @@ def init_db() -> None:
         c.execute("CREATE INDEX IF NOT EXISTS idx_sales_leads_email ON sales_leads(email)")
         c.execute(
             """
+            CREATE TABLE IF NOT EXISTS usage_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                api_key TEXT NOT NULL,
+                period_key TEXT NOT NULL,
+                alert_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(api_key, period_key, alert_type)
+            )
+            """
+        )
+        c.execute(
+            """
             CREATE TABLE IF NOT EXISTS rate_limits (
                 scope TEXT NOT NULL,
                 bucket TEXT NOT NULL,
@@ -278,6 +296,13 @@ def init_db() -> None:
             """
         )
         c.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_window ON rate_limits(window_start)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_compliance_checks_created_at ON compliance_checks(created_at)")
+
+        cols = {row[1] for row in c.execute("PRAGMA table_info(compliance_checks)").fetchall()}
+        if "plan" not in cols:
+            c.execute("ALTER TABLE compliance_checks ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+        if "char_count" not in cols:
+            c.execute("ALTER TABLE compliance_checks ADD COLUMN char_count INTEGER NOT NULL DEFAULT 0")
 
 
 def parse_allowed_origins() -> set[str]:
@@ -377,6 +402,34 @@ def clean_text(value: Any, max_len: int = 120000) -> str:
 
 def month_key() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def day_key() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def checks_today(plan: str | None = None) -> int:
+    prefix = day_key() + "%"
+    with conn() as c:
+        if plan:
+            row = c.execute(
+                """
+                SELECT COUNT(1) AS total
+                FROM compliance_checks
+                WHERE created_at LIKE ? AND plan = ?
+                """,
+                (prefix, plan),
+            ).fetchone()
+        else:
+            row = c.execute(
+                """
+                SELECT COUNT(1) AS total
+                FROM compliance_checks
+                WHERE created_at LIKE ?
+                """,
+                (prefix,),
+            ).fetchone()
+    return int(row["total"]) if row else 0
 
 
 def get_key_record(api_key: str) -> dict[str, Any] | None:
@@ -514,6 +567,20 @@ def runtime_error_response(err: RuntimeError) -> Response:
         resp.status_code = 429
         resp.headers["Retry-After"] = retry_after
         return resp
+    if msg == "free_tier_capacity_reached":
+        resp = jsonify(
+            {
+                "detail": "free_tier_capacity_reached",
+                "upgrade_url": STARTER_PAYMENT_LINK,
+                "message": "Free-tier daily capacity is full. Upgrade for priority access.",
+            }
+        )
+        resp.status_code = 429
+        return resp
+    if msg == "service_capacity_reached":
+        resp = jsonify({"detail": "service_capacity_reached", "message": "Service is at daily capacity. Try again shortly."})
+        resp.status_code = 503
+        return resp
     resp = jsonify({"detail": msg})
     resp.status_code = 429
     return resp
@@ -548,6 +615,14 @@ def require_api_key() -> dict[str, Any]:
         raise PermissionError("Invalid API key")
 
     plan = str(record.get("plan", "free")).lower()
+
+    if GLOBAL_DAILY_CHECK_CAP > 0:
+        if checks_today() >= GLOBAL_DAILY_CHECK_CAP:
+            raise RuntimeError("service_capacity_reached")
+    if plan == "free" and FREE_TIER_DAILY_CHECK_CAP > 0:
+        if checks_today("free") >= FREE_TIER_DAILY_CHECK_CAP:
+            raise RuntimeError("free_tier_capacity_reached")
+
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
     used = int(record.get("checks_used_this_month", 0))
 
@@ -557,7 +632,7 @@ def require_api_key() -> dict[str, Any]:
     return record
 
 
-def increment_usage(api_key: str, delta: int = 1) -> None:
+def increment_usage(api_key: str, delta: int = 1) -> int:
     with conn() as c:
         c.execute(
             """
@@ -567,6 +642,11 @@ def increment_usage(api_key: str, delta: int = 1) -> None:
             """,
             (max(1, delta), now_iso(), api_key),
         )
+        row = c.execute(
+            "SELECT checks_used_this_month FROM api_keys WHERE api_key = ?",
+            (api_key,),
+        ).fetchone()
+    return int(row["checks_used_this_month"]) if row else 0
 
 
 def evidence_snippet(text: str, start: int, end: int, window: int = 60) -> str:
@@ -659,13 +739,75 @@ def evaluate_compliance(text: str, regulations: list[str], content_type: str | N
     }
 
 
-def record_check(api_key: str, request_id: str, result: dict[str, Any], regulation_count: int, content_type: str) -> None:
+def maybe_send_upgrade_alert(key_record: dict[str, Any], used: int) -> None:
+    plan = str(key_record.get("plan", "free")).lower()
+    if plan != "free":
+        return
+    limit = PLAN_LIMITS["free"]["checks_per_month"]
+    pct = (used * 100) / max(1, limit)
+    alert_type = ""
+    if pct >= 95:
+        alert_type = "usage_95"
+    elif pct >= 80:
+        alert_type = "usage_80"
+    else:
+        return
+
+    api_key = str(key_record.get("api_key", ""))
+    if not api_key:
+        return
+    period = month_key()
+    try:
+        with conn() as c:
+            c.execute(
+                """
+                INSERT INTO usage_alerts (api_key, period_key, alert_type, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (api_key, period, alert_type, now_iso()),
+            )
+    except sqlite3.IntegrityError:
+        return
+
+    email = str(key_record.get("email", "")).strip().lower()
+    remaining = max(0, limit - used)
+    if email:
+        send_followup_email(
+            email,
+            "CheckAPI usage limit warning",
+            (
+                f"<p>You have used <b>{used}/{limit}</b> free checks this month.</p>"
+                f"<p>Remaining: <b>{remaining}</b></p>"
+                f"<p>Upgrade now: <a href=\"{STARTER_PAYMENT_LINK}\">Start Starter</a></p>"
+            ),
+        )
+    if FOLLOWUP_INBOX_EMAIL:
+        send_followup_email(
+            FOLLOWUP_INBOX_EMAIL,
+            "CheckAPI high-intent free user",
+            (
+                f"<p><b>Email:</b> {email or 'n/a'}</p>"
+                f"<p><b>Usage:</b> {used}/{limit} ({int(pct)}%)</p>"
+                f"<p><b>Upgrade link:</b> <a href=\"{STARTER_PAYMENT_LINK}\">{STARTER_PAYMENT_LINK}</a></p>"
+            ),
+        )
+
+
+def record_check(
+    api_key: str,
+    request_id: str,
+    result: dict[str, Any],
+    regulation_count: int,
+    content_type: str,
+    plan: str,
+    char_count: int,
+) -> None:
     with conn() as c:
         c.execute(
             """
             INSERT INTO compliance_checks
-            (api_key, request_id, regulation_count, risk_score, severity, flag_count, content_type, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (api_key, request_id, regulation_count, risk_score, severity, flag_count, content_type, plan, char_count, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 api_key,
@@ -675,6 +817,8 @@ def record_check(api_key: str, request_id: str, result: dict[str, Any], regulati
                 str(result.get("severity", "none")),
                 int(result.get("flag_count", 0)),
                 content_type,
+                plan,
+                max(0, char_count),
                 now_iso(),
             ),
         )
@@ -745,9 +889,18 @@ def run_single_check(payload: dict[str, Any], key_record: dict[str, Any], *, cou
     result = evaluate_compliance(text, regulations, content_type)
 
     if count_usage:
-        increment_usage(key_record["api_key"], 1)
+        used_after = increment_usage(key_record["api_key"], 1)
         request_id = "chk_" + secrets.token_hex(8)
-        record_check(key_record["api_key"], request_id, result, len(regulations), content_type)
+        record_check(
+            key_record["api_key"],
+            request_id,
+            result,
+            len(regulations),
+            content_type,
+            plan,
+            len(text),
+        )
+        maybe_send_upgrade_alert(key_record, used_after)
         result["request_id"] = request_id
 
     return result
@@ -969,9 +1122,12 @@ def openapi_spec() -> Response:
                         "checks_used_this_month": {"type": "integer"},
                         "checks_limit": {"type": "integer"},
                         "checks_remaining": {"type": "integer"},
+                        "usage_percent": {"type": "integer"},
                         "max_chars": {"type": "integer"},
                         "batch_limit": {"type": "integer"},
                         "billing_period": {"type": "string"},
+                        "upgrade_recommended": {"type": "boolean"},
+                        "upgrade_url": {"type": "string"},
                     },
                 },
                 "MCPToolsResponse": {
@@ -1190,9 +1346,13 @@ def openapi_spec() -> Response:
 @app.route("/api/signup", methods=["POST"])
 def signup() -> Response:
     try:
-        ip_ok, ip_retry = check_rate_limit("signup_ip", bucketize(client_ip()), SIGNUP_RATE_LIMIT_PER_MINUTE)
+        ip = client_ip()
+        ip_ok, ip_retry = check_rate_limit("signup_ip", bucketize(ip), SIGNUP_RATE_LIMIT_PER_MINUTE)
         if not ip_ok:
             raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+        ip_daily_ok, ip_daily_retry = check_rate_limit("signup_ip_day", bucketize(ip), FREE_SIGNUPS_PER_IP_PER_DAY, 86400)
+        if not ip_daily_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{ip_daily_retry}")
 
         payload = parse_payload()
         email = clean_text(payload.get("email"), max_len=255).lower()
@@ -1270,6 +1430,9 @@ def usage() -> Response:
     plan = str(record.get("plan", "free")).lower()
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
     used = int(record.get("checks_used_this_month", 0))
+    usage_pct = int((used * 100) / max(1, limits["checks_per_month"]))
+    if used > 0 and usage_pct == 0:
+        usage_pct = 1
 
     return jsonify(
         {
@@ -1277,9 +1440,12 @@ def usage() -> Response:
             "checks_used_this_month": used,
             "checks_limit": limits["checks_per_month"],
             "checks_remaining": max(0, limits["checks_per_month"] - used),
+            "usage_percent": usage_pct,
             "max_chars": limits["max_chars"],
             "batch_limit": limits["batch_limit"],
             "billing_period": record.get("month_reset") or month_key(),
+            "upgrade_recommended": plan == "free" and usage_pct >= 70,
+            "upgrade_url": STARTER_PAYMENT_LINK if plan == "free" else "",
         }
     )
 
@@ -1427,13 +1593,19 @@ def mcp_transport() -> Response:
             plan = str(fresh_record.get("plan", "free")).lower()
             limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
             used = int(fresh_record.get("checks_used_this_month", 0))
+            usage_pct = int((used * 100) / max(1, limits["checks_per_month"]))
+            if used > 0 and usage_pct == 0:
+                usage_pct = 1
             usage_payload = {
                 "plan": plan,
                 "checks_used_this_month": used,
                 "checks_limit": limits["checks_per_month"],
                 "checks_remaining": max(0, limits["checks_per_month"] - used),
+                "usage_percent": usage_pct,
                 "max_chars": limits["max_chars"],
                 "batch_limit": limits["batch_limit"],
+                "upgrade_recommended": plan == "free" and usage_pct >= 70,
+                "upgrade_url": STARTER_PAYMENT_LINK if plan == "free" else "",
             }
             return jsonify({"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": json.dumps(usage_payload)}]}})
 

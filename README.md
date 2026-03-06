@@ -89,6 +89,9 @@ railway variable set CHECKOUT_RATE_LIMIT_PER_MINUTE="20" --service check-api
 railway variable set WEBHOOK_RATE_LIMIT_PER_MINUTE="120" --service check-api
 railway variable set API_RATE_LIMIT_PER_KEY_PER_MINUTE="240" --service check-api
 railway variable set API_RATE_LIMIT_PER_IP_PER_MINUTE="360" --service check-api
+railway variable set FREE_SIGNUPS_PER_IP_PER_DAY="8" --service check-api
+railway variable set GLOBAL_DAILY_CHECK_CAP="30000" --service check-api
+railway variable set FREE_TIER_DAILY_CHECK_CAP="8000" --service check-api
 railway variable set STRIPE_SECRET_KEY="sk_live_..." --service check-api
 railway variable set STRIPE_WEBHOOK_SECRET="whsec_..." --service check-api
 railway variable set STRIPE_STARTER_MONTHLY="price_..." --service check-api
@@ -107,6 +110,9 @@ railway variable set SCALE_PAYMENT_LINK="https://buy.stripe.com/..." --service c
 - Existing account API keys are not returned by `POST /api/signup`
 - CORS is restricted to `CORS_ALLOW_ORIGINS` / `PUBLIC_BASE_URL` (no wildcard)
 - Secure headers enabled (`CSP`, `HSTS`, `X-Frame-Options`, `nosniff`, `Permissions-Policy`)
+- Free-tier abuse controls: per-IP/day signup caps and free-tier daily usage cap
+- Global daily capacity cap protects margin during traffic spikes
+- Usage responses include `upgrade_recommended` + `upgrade_url` for fast conversion
 
 ## Suggested first registries to submit
 

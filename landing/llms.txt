@@ -30,6 +30,7 @@ It is built MCP-first so agents can call compliance checks before final response
 - Scale: 100,000 checks/month
 - Self-serve checkout plus setup support path
 - Instant paid checkout via `POST /api/public/lead`
+- Paid plans receive priority when free-tier daily capacity is saturated
 
 ## Tool Calling Guidance
 - Always call `check_compliance` before returning compliance-sensitive content.
