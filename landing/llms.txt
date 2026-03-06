@@ -21,7 +21,7 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - Structured pass/fail + risk score + flagged evidence + remediation
 - Single-check and batch-check endpoints
 - Tool descriptions optimized for automatic LLM tool selection
-- Fast onboarding: signup key, fetch tools, call check before final output
+- Fast onboarding: paid checkout, key delivery, fetch tools, call check before final output
 
 ## DataWeaveAI Unified Bundle (4 Services)
 - ExtractAPI: {{EXTRACT_API_URL}} (document extraction, from $49/month)
@@ -34,7 +34,6 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - Bundle dashboard: {{AGENT_ROUTER_BUNDLE_DASHBOARD_URL}}
 
 ## Access + Pricing
-- Free tier: 500 checks/month
 - Starter: 5,000 checks/month ($29/month)
 - Pro: 25,000 checks/month ($99/month)
 - Scale: 100,000 checks/month ($299/month)
@@ -47,10 +46,11 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - Use `check_batch_compliance` for multi-document workflows.
 
 ## 5-Minute Integration Checklist
-1. `POST {{BASE_URL}}/api/signup` to create an API key.
-2. `POST {{BASE_URL}}/v1/check` to run your first validation.
-3. `POST {{BASE_URL}}/mcp` with method `tools/call` and tool `check_compliance`.
-4. Enforce guardrail rule: block final output when `pass=false` or `risk_score >= 30`.
+1. `POST {{BASE_URL}}/api/public/lead` with plan `starter`, `pro`, or `scale`.
+2. Complete Stripe checkout and receive API key.
+3. `POST {{BASE_URL}}/v1/check` to run your first validation.
+4. `POST {{BASE_URL}}/mcp` with method `tools/call` and tool `check_compliance`.
+5. Enforce guardrail rule: block final output when `pass=false` or `risk_score >= 30`.
 
 ## Discovery Endpoints
 - OpenAPI: {{BASE_URL}}/openapi.json

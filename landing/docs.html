@@ -22,11 +22,11 @@
     <p>MCP-first compliance validation for agent outputs and document workflows. Designed for a 5-minute integration.</p>
 
     <div class="card">
-      <h3>1) Create a free API key (500 checks/month)</h3>
-      <pre class="mono">curl -X POST {{BASE_URL}}/api/signup \\
+      <h3>1) Start paid checkout and issue key</h3>
+      <pre class="mono">curl -X POST {{BASE_URL}}/api/public/lead \\
   -H "Content-Type: application/json" \\
-  -d '{"email":"you@company.com"}'</pre>
-      <p>If the email already exists, CheckAPI returns an accepted message and sends key details to that inbox.</p>
+  -d '{"email":"you@company.com","plan":"starter","source":"docs_quick_checkout"}'</pre>
+      <p>Returns a Stripe checkout URL. API key delivery is triggered after successful payment.</p>
     </div>
 
     <div class="card">

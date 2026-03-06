@@ -81,6 +81,7 @@ STRIPE_PRO_MONTHLY = os.getenv("STRIPE_PRO_MONTHLY", "").strip()
 STRIPE_SCALE_MONTHLY = os.getenv("STRIPE_SCALE_MONTHLY", "").strip()
 SELF_SERVE_CHECKOUT_ENABLED = env_bool("SELF_SERVE_CHECKOUT_ENABLED", True)
 SIGNUP_EXPOSE_API_KEY_ON_CREATE = env_bool("SIGNUP_EXPOSE_API_KEY_ON_CREATE", True)
+FREE_SIGNUP_ENABLED = env_bool("FREE_SIGNUP_ENABLED", False)
 
 MAX_TEXT_CHARS_GLOBAL = env_int("MAX_TEXT_CHARS_GLOBAL", 120000)
 MAX_REQUEST_BYTES = env_int("MAX_REQUEST_BYTES", 1_200_000)
@@ -1468,7 +1469,7 @@ def openapi_spec() -> Response:
         "paths": {
             "/api/signup": {
                 "post": {
-                    "summary": "Create free API key",
+                    "summary": "Request API access (paid self-serve)",
                     "requestBody": {
                         "required": True,
                         "content": {
@@ -1706,6 +1707,16 @@ def signup() -> Response:
                     "status": "accepted",
                     "message": "If this email is registered, API key details have been sent to its inbox.",
                 }
+            )
+
+        if not FREE_SIGNUP_ENABLED:
+            return (
+                jsonify(
+                    {
+                        "detail": "Free signup is disabled. Start Starter/Pro/Scale checkout from /#pricing.",
+                    }
+                ),
+                410,
             )
 
         api_key = create_api_key(email, "free")
@@ -1975,7 +1986,6 @@ def agent_offer() -> Response:
                 "evidence flags, and remediation output."
             ),
             "pricing": {
-                "free_checks_per_month": 500,
                 "starter_usd_month": 29,
                 "pro_usd_month": 99,
                 "scale_usd_month": 299,
@@ -2010,7 +2020,7 @@ def agent_offer() -> Response:
                     "description": "Pay $3,156 today (setup + first month), then $656/month.",
                 },
             ],
-            "free_path": {"cta": f"{base}/docs", "description": "Generate free key and test MCP/REST."},
+            "docs_path": {"cta": f"{base}/docs", "description": "Integration docs and paid onboarding paths."},
             "discoverability": {
                 "llms": f"{base}/llms.txt",
                 "openapi": f"{base}/openapi.json",
@@ -2422,7 +2432,6 @@ def public_config() -> Response:
                 "full_launch_checkout_url": AGENT_ROUTER_BUNDLE_FULL_URL,
             },
             "plans": {
-                "free": 500,
                 "starter": 5000,
                 "pro": 25000,
                 "scale": 100000,
