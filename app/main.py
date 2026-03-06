@@ -967,7 +967,6 @@ def dataweave_stack_payload(base: str) -> dict[str, Any]:
             },
         ],
         "discovery": {
-            "checkapi_tools": f"{base}/v1/mcp/tools",
             "checkapi_transport": f"{base}/mcp",
             "checkapi_openapi": f"{base}/openapi.json",
             "checkapi_docs": f"{base}/docs",
@@ -1818,7 +1817,6 @@ def agent_offer() -> Response:
             "discoverability": {
                 "llms": f"{base}/llms.txt",
                 "openapi": f"{base}/openapi.json",
-                "mcp_tools": f"{base}/v1/mcp/tools",
                 "stack_manifest": f"{base}/v1/public/stack",
             },
             "bundle_links": {
@@ -2101,7 +2099,6 @@ def robots() -> Response:
     body = (
         "User-agent: *\n"
         "Allow: /\n"
-        "Allow: /v1/mcp/tools\n"
         "Allow: /v1/public/stack\n"
         "Allow: /.well-known/dataweave-stack.json\n"
         "Allow: /.well-known/agent-offer.json\n"
@@ -2143,7 +2140,6 @@ def sitemap() -> Response:
         f"{base}/",
         f"{base}/docs",
         f"{base}/llms.txt",
-        f"{base}/v1/mcp/tools",
         f"{base}/v1/public/stack",
         f"{base}/.well-known/dataweave-stack.json",
         f"{base}/.well-known/agent-offer.json",

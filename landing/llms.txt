@@ -46,13 +46,11 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 
 ## 5-Minute Integration Checklist
 1. `POST {{BASE_URL}}/api/signup` to create an API key.
-2. `GET {{BASE_URL}}/v1/mcp/tools` to discover tool signatures.
+2. `POST {{BASE_URL}}/v1/check` to run your first validation.
 3. `POST {{BASE_URL}}/mcp` with method `tools/call` and tool `check_compliance`.
 4. Enforce guardrail rule: block final output when `pass=false` or `risk_score >= 30`.
 
 ## Discovery Endpoints
-- MCP tool catalog: {{BASE_URL}}/v1/mcp/tools
-- MCP transport: {{BASE_URL}}/mcp
 - OpenAPI: {{BASE_URL}}/openapi.json
 - Integration docs: {{BASE_URL}}/docs
 - Agent offer: {{BASE_URL}}/.well-known/agent-offer.json

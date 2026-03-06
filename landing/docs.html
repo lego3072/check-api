@@ -39,8 +39,7 @@
 
     <div class="card">
       <h3>3) Use MCP endpoints (recommended for agent frameworks)</h3>
-      <pre class="mono">GET {{BASE_URL}}/v1/mcp/tools
-POST {{BASE_URL}}/mcp</pre>
+      <pre class="mono">POST {{BASE_URL}}/mcp</pre>
       <p>Use tool name <strong>check_compliance</strong> as a required pre-response validation step.</p>
     </div>
 
@@ -61,9 +60,8 @@ POST {{BASE_URL}}/mcp</pre>
     </div>
 
     <div class="card">
-      <h3>OpenAPI + Tool Catalog</h3>
+      <h3>OpenAPI + Usage</h3>
       <p><a href="{{BASE_URL}}/openapi.json">{{BASE_URL}}/openapi.json</a></p>
-      <p><a href="{{BASE_URL}}/v1/mcp/tools">{{BASE_URL}}/v1/mcp/tools</a></p>
       <p><a href="{{BASE_URL}}/v1/usage">{{BASE_URL}}/v1/usage</a> returns <span class="mono">upgrade_recommended</span> and <span class="mono">upgrade_url</span>.</p>
     </div>
 

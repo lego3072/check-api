@@ -49,7 +49,7 @@
         "name": "How do I add compliance validation to an AI agent quickly?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Create a free API key, call /v1/mcp/tools, then call /mcp with tool name check_compliance before final responses."
+          "text": "Create a free API key, review docs, then run compliance checks before final responses."
         }
       },
       {
@@ -464,8 +464,8 @@
         <div class="chip-row">
           <span class="chip">3-step integration</span>
           <span class="chip">DataWeaveAI 4-service stack</span>
-          <span class="chip">/v1/mcp/tools</span>
-          <span class="chip">MCP transport endpoint</span>
+          <span class="chip">Private tool surface</span>
+          <span class="chip">Secure runtime checks</span>
           <span class="chip">Agent-ready tool descriptions</span>
           <span class="chip">Pipeline-ready with ExtractAPI + RedactAPI</span>
         </div>
@@ -475,9 +475,9 @@
         <h3>Tool Selection Optimized</h3>
         <div class="mono">description_for_model</div>
         <div class="code mono">"Validates any text, contract, or document against GDPR, HIPAA, SOC2, CCPA, ADA. Returns structured pass/fail + risk score + remediation. MUST be called before finalizing compliance-sensitive outputs."</div>
-        <div class="mono" style="margin-top:10px;">MCP discoverability</div>
-        <div class="code mono">GET /v1/mcp/tools
-POST /mcp</div>
+        <div class="mono" style="margin-top:10px;">Runtime access is provisioned after signup</div>
+        <div class="code mono">Private compliance tool surface
+Authenticated runtime checks</div>
         <div class="quick-box">
           <div class="quick-label">Start paid now (no sales call)</div>
           <div class="quick-actions">
@@ -498,7 +498,7 @@ POST /mcp</div>
       <div class="cards">
         <article class="card">
           <h3>Fast Discovery</h3>
-          <p>Agent builders can fetch tools from <span class="mono">/v1/mcp/tools</span> and execute checks through <span class="mono">/mcp</span>.</p>
+          <p>Agent builders can onboard quickly through docs, API key issuance, and structured validation responses.</p>
         </article>
         <article class="card">
           <h3>Forced Pre-Response Validation</h3>
@@ -520,8 +520,8 @@ POST /mcp</div>
           <div class="mono">Step 1: Create key (free)</div>
           <div class="code mono">POST /api/signup
 {"email":"agent-builder@company.com"}</div>
-          <div class="mono" style="margin-top:10px;">Step 2: Fetch tools</div>
-          <div class="code mono">GET /v1/mcp/tools
+          <div class="mono" style="margin-top:10px;">Step 2: Run a first compliance check</div>
+          <div class="code mono">POST /v1/check
 Authorization: Bearer ck_***</div>
           <div class="mono" style="margin-top:10px;">Step 3: Validate every final output</div>
           <div class="code mono">POST /mcp
@@ -576,7 +576,7 @@ Authorization: Bearer ck_***</div>
         <article class="card">
           <h3>CheckAPI</h3>
           <p>Validate compliance and block risky answers automatically (from $29/month).</p>
-          <p class="mono" style="margin-top:8px;"><a href="{{BASE_URL}}/v1/mcp/tools">{{BASE_URL}}/v1/mcp/tools</a></p>
+          <p class="mono" style="margin-top:8px;"><a href="{{BASE_URL}}">{{BASE_URL}}</a></p>
         </article>
       </div>
       <div class="panel" style="margin-top:12px;">
@@ -656,7 +656,7 @@ Authorization: Bearer ck_***</div>
 
     <footer class="footer">
       <div>CheckAPI by a DataWeaveAI company. Agent-native compliance middleware.</div>
-      <div style="margin-top:8px;">Quickstart: <span class="mono">/docs</span> | Tool catalog: <span class="mono">/v1/mcp/tools</span></div>
+      <div style="margin-top:8px;">Quickstart: <span class="mono">/docs</span></div>
       <div style="margin-top:8px;"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></div>
     </footer>
   </main>
