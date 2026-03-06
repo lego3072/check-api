@@ -425,7 +425,7 @@
         <a href="#quickstart">Quickstart</a>
         <a href="#pricing">Pricing</a>
         <a href="/docs" class="btn btn-muted">Docs</a>
-        <a href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" class="btn btn-primary">Start $29</a>
+        <a href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" class="btn btn-primary" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Start $29</a>
       </div>
     </div>
   </nav>
@@ -442,7 +442,7 @@
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="/docs">Start Free API Key</a>
-          <a class="btn btn-muted" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer">Upgrade to Starter</a>
+          <a class="btn btn-muted" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Upgrade to Starter</a>
         </div>
         <div class="chip-row">
           <span class="chip">3-step integration</span>
@@ -581,7 +581,7 @@ Authorization: Bearer ck_***</div>
             <li>Higher batch limits</li>
             <li>Best for active agent pilots</li>
           </ul>
-          <a class="btn btn-primary" style="width:100%;" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer">Start Starter</a>
+          <a class="btn btn-primary" style="width:100%;" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Start Starter</a>
         </article>
 
         <article class="plan">
@@ -592,7 +592,7 @@ Authorization: Bearer ck_***</div>
             <li>Larger payload limits</li>
             <li>For production agent stacks</li>
           </ul>
-          <a class="btn btn-muted" style="width:100%;" href="{{PRO_PAYMENT_LINK}}" target="_blank" rel="noreferrer">Start Pro</a>
+          <a class="btn btn-muted" style="width:100%;" href="{{PRO_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="pro" data-fallback="{{PRO_PAYMENT_LINK}}">Start Pro</a>
         </article>
 
         <article class="plan">
@@ -603,7 +603,7 @@ Authorization: Bearer ck_***</div>
             <li>Large batch throughput</li>
             <li>High-volume orchestration</li>
           </ul>
-          <a class="btn btn-muted" style="width:100%;" href="{{SCALE_PAYMENT_LINK}}" target="_blank" rel="noreferrer">Start Scale</a>
+          <a class="btn btn-muted" style="width:100%;" href="{{SCALE_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="scale" data-fallback="{{SCALE_PAYMENT_LINK}}">Start Scale</a>
         </article>
       </div>
     </section>
