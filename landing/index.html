@@ -258,6 +258,45 @@
       overflow-x: auto;
     }
 
+    .quick-box {
+      margin-top: 12px;
+      border: 1px solid #2f5769;
+      border-radius: 12px;
+      background: rgba(7, 24, 33, 0.92);
+      padding: 12px;
+    }
+
+    .quick-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 7px;
+      display: block;
+    }
+
+    .quick-input {
+      width: 100%;
+      background: #0a1f2a;
+      border: 1px solid #2a4a5c;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 14px;
+      margin-bottom: 10px;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .quick-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
     .grid-2 {
       display: grid;
       gap: 18px;
@@ -421,6 +460,17 @@
         <div class="mono" style="margin-top:10px;">MCP discoverability</div>
         <div class="code mono">GET /v1/mcp/tools
 POST /mcp</div>
+        <div class="quick-box">
+          <label class="quick-label" for="quick-email">Start paid now (no sales call)</label>
+          <input id="quick-email" class="quick-input" type="email" placeholder="you@company.com" autocomplete="email" />
+          <div class="quick-actions">
+            <button class="btn btn-primary" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Starter $29</button>
+            <button class="btn btn-muted" data-plan="pro" data-fallback="{{PRO_PAYMENT_LINK}}">Pro $99</button>
+            <button class="btn btn-muted" data-plan="scale" data-fallback="{{SCALE_PAYMENT_LINK}}">Scale $299</button>
+            <button class="btn btn-muted" data-plan="setup" data-fallback="{{SETUP_PAYMENT_LINK}}">Done-For-You Setup</button>
+          </div>
+          <div id="quick-note" class="quick-note">We prefill Stripe checkout and notify onboarding instantly.</div>
+        </div>
       </div>
     </section>
 
@@ -563,5 +613,68 @@ Authorization: Bearer ck_***</div>
       <div style="margin-top:8px;">Quickstart: <span class="mono">/docs</span> | Tool catalog: <span class="mono">/v1/mcp/tools</span></div>
     </footer>
   </main>
+  <script>
+  (function () {
+    const emailInput = document.getElementById("quick-email");
+    const note = document.getElementById("quick-note");
+    const buttons = Array.from(document.querySelectorAll("[data-plan]"));
+
+    function setBusy(isBusy) {
+      buttons.forEach((btn) => { btn.disabled = isBusy; });
+    }
+
+    function getUtmParams() {
+      const q = new URLSearchParams(window.location.search);
+      return {
+        utm_source: q.get("utm_source") || "",
+        utm_medium: q.get("utm_medium") || "",
+        utm_campaign: q.get("utm_campaign") || "",
+        utm_content: q.get("utm_content") || "",
+        utm_term: q.get("utm_term") || ""
+      };
+    }
+
+    async function launch(plan, fallback) {
+      const email = (emailInput && emailInput.value || "").trim().toLowerCase();
+      if (!email) {
+        window.location.href = fallback;
+        return;
+      }
+      try {
+        setBusy(true);
+        note.textContent = "Preparing secure checkout...";
+        const body = {
+          email,
+          plan,
+          source: "homepage_quick_checkout",
+          ...getUtmParams()
+        };
+        const resp = await fetch("/api/public/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.checkout_url) {
+          throw new Error(data.detail || "Checkout could not be created");
+        }
+        note.textContent = "Redirecting to Stripe...";
+        window.location.href = data.checkout_url;
+      } catch (err) {
+        note.textContent = "Could not start checkout. Opening direct Stripe link.";
+        window.location.href = fallback;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        launch(btn.dataset.plan || "starter", btn.dataset.fallback || "{{STARTER_PAYMENT_LINK}}");
+      });
+    });
+  })();
+  </script>
 </body>
 </html>

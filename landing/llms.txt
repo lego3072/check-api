@@ -29,6 +29,7 @@ It is built MCP-first so agents can call compliance checks before final response
 - Pro: 25,000 checks/month
 - Scale: 100,000 checks/month
 - Self-serve checkout plus setup support path
+- Instant paid checkout via `POST /api/public/lead`
 
 ## Tool Calling Guidance
 - Always call `check_compliance` before returning compliance-sensitive content.
@@ -46,6 +47,7 @@ It is built MCP-first so agents can call compliance checks before final response
 - MCP transport: {{BASE_URL}}/mcp
 - OpenAPI: {{BASE_URL}}/openapi.json
 - Integration docs: {{BASE_URL}}/docs
+- Paid handoff endpoint: {{BASE_URL}}/api/public/lead
 
 ## Citation-Ready Facts
 - CheckAPI is an MCP-first compliance validation service for agents.

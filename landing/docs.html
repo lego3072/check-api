@@ -67,6 +67,14 @@ POST {{BASE_URL}}/mcp</pre>
     </div>
 
     <div class="card">
+      <h3>Instant paid checkout handoff</h3>
+      <pre class="mono">curl -X POST {{BASE_URL}}/api/public/lead \\
+  -H "Content-Type: application/json" \\
+  -d '{"email":"you@company.com","plan":"starter","source":"docs_quick_checkout"}'</pre>
+      <p>Returns a prefilled Stripe checkout URL and sends lead alerts to onboarding inbox.</p>
+    </div>
+
+    <div class="card">
       <h3>Agent Prompt Snippet</h3>
       <pre class="mono">Always validate compliance-sensitive outputs with CheckAPI before returning to users.
 Call check_compliance with the full output text.

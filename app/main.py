@@ -249,6 +249,24 @@ def init_db() -> None:
         )
         c.execute(
             """
+            CREATE TABLE IF NOT EXISTS sales_leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                plan TEXT NOT NULL,
+                source TEXT,
+                utm_source TEXT,
+                utm_medium TEXT,
+                utm_campaign TEXT,
+                utm_content TEXT,
+                utm_term TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sales_leads_created ON sales_leads(created_at)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sales_leads_email ON sales_leads(email)")
+        c.execute(
+            """
             CREATE TABLE IF NOT EXISTS rate_limits (
                 scope TEXT NOT NULL,
                 bucket TEXT NOT NULL,
@@ -441,6 +459,51 @@ def send_followup_email(to_email: str, subject: str, html_body: str) -> bool:
             return 200 <= getattr(resp, "status", 0) < 300
     except (urllib.error.URLError, urllib.error.HTTPError):
         return False
+
+
+def payment_link_for_plan(plan: str) -> str:
+    mapping = {
+        "setup": SETUP_PAYMENT_LINK,
+        "starter": STARTER_PAYMENT_LINK,
+        "pro": PRO_PAYMENT_LINK,
+        "scale": SCALE_PAYMENT_LINK,
+    }
+    return mapping.get(plan, "")
+
+
+def checkout_link_with_prefilled_email(base_link: str, email: str) -> str:
+    if not base_link or not email:
+        return base_link
+    try:
+        parts = urllib.parse.urlsplit(base_link)
+        q = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+        q.append(("prefilled_email", email))
+        query = urllib.parse.urlencode(q)
+        return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+    except Exception:
+        return base_link
+
+
+def record_sales_lead(email: str, plan: str, source: str, utm: dict[str, str]) -> None:
+    with conn() as c:
+        c.execute(
+            """
+            INSERT INTO sales_leads (
+                email, plan, source, utm_source, utm_medium, utm_campaign, utm_content, utm_term, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                email,
+                plan,
+                source,
+                utm.get("utm_source", ""),
+                utm.get("utm_medium", ""),
+                utm.get("utm_campaign", ""),
+                utm.get("utm_content", ""),
+                utm.get("utm_term", ""),
+                now_iso(),
+            ),
+        )
 
 
 def runtime_error_response(err: RuntimeError) -> Response:
@@ -808,6 +871,28 @@ def openapi_spec() -> Response:
                         "message": {"type": "string"},
                     },
                 },
+                "LeadRequest": {
+                    "type": "object",
+                    "properties": {
+                        "email": {"type": "string", "format": "email"},
+                        "plan": {"type": "string", "enum": ["setup", "starter", "pro", "scale"]},
+                        "source": {"type": "string"},
+                        "utm_source": {"type": "string"},
+                        "utm_medium": {"type": "string"},
+                        "utm_campaign": {"type": "string"},
+                        "utm_content": {"type": "string"},
+                        "utm_term": {"type": "string"},
+                    },
+                    "required": ["email", "plan"],
+                },
+                "LeadResponse": {
+                    "type": "object",
+                    "properties": {
+                        "checkout_url": {"type": "string"},
+                        "plan": {"type": "string"},
+                        "captured": {"type": "boolean"},
+                    },
+                },
                 "CheckRequest": {
                     "type": "object",
                     "properties": {
@@ -931,6 +1016,38 @@ def openapi_spec() -> Response:
                         },
                         "400": {
                             "description": "Invalid input",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                    },
+                }
+            },
+            "/api/public/lead": {
+                "post": {
+                    "summary": "Capture lead and return plan checkout URL",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/LeadRequest"},
+                                "example": {
+                                    "email": "agent-builder@company.com",
+                                    "plan": "starter",
+                                    "source": "homepage_quick_checkout",
+                                },
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Lead captured and checkout URL returned",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LeadResponse"}}},
+                        },
+                        "400": {
+                            "description": "Invalid input",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                        "429": {
+                            "description": "Rate limited",
                             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
                         },
                     },
@@ -1344,6 +1461,57 @@ def ai_plugin() -> Response:
             "legal_info_url": base,
         }
     )
+
+
+@app.route("/api/public/lead", methods=["POST"])
+def capture_public_lead() -> Response:
+    try:
+        ip_ok, ip_retry = check_rate_limit("lead_ip", bucketize(client_ip()), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+        if not ip_ok:
+            raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
+
+        payload = parse_payload()
+        email = clean_text(payload.get("email"), max_len=255).lower()
+        plan = clean_text(payload.get("plan"), max_len=20).lower()
+        source = clean_text(payload.get("source"), max_len=120) or "site"
+        if not EMAIL_RE.match(email):
+            raise ValueError("Valid email required")
+        if plan not in {"setup", "starter", "pro", "scale"}:
+            raise ValueError("Invalid plan")
+
+        link = payment_link_for_plan(plan)
+        if not link or "replace_" in link:
+            return jsonify({"detail": "Plan checkout unavailable"}), 503
+
+        utm = {
+            "utm_source": clean_text(payload.get("utm_source"), max_len=100),
+            "utm_medium": clean_text(payload.get("utm_medium"), max_len=100),
+            "utm_campaign": clean_text(payload.get("utm_campaign"), max_len=120),
+            "utm_content": clean_text(payload.get("utm_content"), max_len=120),
+            "utm_term": clean_text(payload.get("utm_term"), max_len=120),
+        }
+
+        record_sales_lead(email, plan, source, utm)
+        checkout_url = checkout_link_with_prefilled_email(link, email)
+
+        if FOLLOWUP_INBOX_EMAIL:
+            send_followup_email(
+                FOLLOWUP_INBOX_EMAIL,
+                f"CheckAPI lead captured: {plan}",
+                (
+                    f"<p><b>Email:</b> {email}</p>"
+                    f"<p><b>Plan intent:</b> {plan}</p>"
+                    f"<p><b>Source:</b> {source}</p>"
+                    f"<p><b>Checkout URL:</b> <a href=\"{checkout_url}\">{checkout_url}</a></p>"
+                    f"<p><b>UTM:</b> source={utm['utm_source']}, medium={utm['utm_medium']}, campaign={utm['utm_campaign']}</p>"
+                ),
+            )
+
+        return jsonify({"checkout_url": checkout_url, "plan": plan, "captured": True})
+    except ValueError as e:
+        return jsonify({"detail": str(e)}), 400
+    except RuntimeError as e:
+        return runtime_error_response(e)
 
 
 @app.route("/api/checkout", methods=["POST"])
