@@ -867,37 +867,6 @@ def mcp_transport() -> Response:
     return jsonify({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": "Unsupported method"}})
 
 
-@app.route("/.well-known/mcp/servers.json", methods=["GET"])
-def mcp_servers_discovery() -> Response:
-    if not PUBLIC_DISCOVERY_ENABLED:
-        return jsonify({"detail": "Not found"}), 404
-    base = external_base_url()
-    return jsonify(
-        {
-            "version": "1.0",
-            "servers": [
-                {
-                    "id": "checkapi",
-                    "name": "CheckAPI Compliance Guardrail",
-                    "description": "Agent-native compliance validation middleware for GDPR, HIPAA, CCPA, SOC2, and ADA.",
-                    "homepage": base,
-                    "transport": {
-                        "type": "http",
-                        "url": f"{base}/mcp",
-                    },
-                    "tools_url": f"{base}/v1/mcp/tools",
-                    "auth": {
-                        "type": "api_key",
-                        "in": "header",
-                        "name": "X-API-Key",
-                    },
-                    "tags": ["compliance", "validation", "mcp", "agent-guardrail"],
-                }
-            ],
-        }
-    )
-
-
 @app.route("/.well-known/ai-plugin.json", methods=["GET"])
 def ai_plugin() -> Response:
     if not PUBLIC_DOCS_ENABLED:
@@ -1095,7 +1064,6 @@ def robots() -> Response:
     body = (
         "User-agent: *\n"
         "Allow: /\n"
-        "Allow: /.well-known/mcp/servers.json\n"
         "Allow: /v1/mcp/tools\n"
         "Allow: /llms.txt\n"
         "Disallow: /v1/\n"
@@ -1128,7 +1096,6 @@ def sitemap() -> Response:
         f"{base}/",
         f"{base}/docs",
         f"{base}/llms.txt",
-        f"{base}/.well-known/mcp/servers.json",
         f"{base}/v1/mcp/tools",
         f"{base}/openapi.json",
     ]

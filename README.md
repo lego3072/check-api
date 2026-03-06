@@ -20,7 +20,6 @@ Returns structured JSON with:
 
 ## Why this fits agent distribution
 
-- MCP discovery endpoint: `/.well-known/mcp/servers.json`
 - MCP tool catalog: `/v1/mcp/tools`
 - MCP transport endpoint: `/mcp` (JSON-RPC)
 - LLM profile: `/llms.txt`
@@ -35,7 +34,6 @@ Returns structured JSON with:
 - `POST /api/checkout` - Stripe checkout session for starter/pro/scale
 - `POST /api/stripe/webhook` - Stripe webhook for plan updates
 - `GET /api/billing/verify-session` - verify checkout session status
-- `GET /.well-known/mcp/servers.json` - MCP discovery metadata
 - `GET /v1/mcp/tools` - tool definitions for agent frameworks
 - `POST /mcp` - MCP JSON-RPC transport
 

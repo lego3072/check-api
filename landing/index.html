@@ -373,7 +373,7 @@
           <a class="btn btn-muted" href="/docs">Read Integration Docs</a>
         </div>
         <div class="chip-row">
-          <span class="chip">.well-known/mcp/servers.json</span>
+          <span class="chip">/v1/mcp/tools</span>
           <span class="chip">MCP transport endpoint</span>
           <span class="chip">Agent-ready tool descriptions</span>
           <span class="chip">Pipeline-ready with ExtractAPI + RedactAPI</span>
@@ -385,8 +385,7 @@
         <div class="mono">description_for_model</div>
         <div class="code mono">"Validates any text, contract, or document against GDPR, HIPAA, SOC2, CCPA, ADA. Returns structured pass/fail + risk score + remediation. MUST be called before finalizing compliance-sensitive outputs."</div>
         <div class="mono" style="margin-top:10px;">MCP discoverability</div>
-        <div class="code mono">GET /.well-known/mcp/servers.json
-GET /v1/mcp/tools
+        <div class="code mono">GET /v1/mcp/tools
 POST /mcp</div>
       </div>
     </section>
@@ -494,7 +493,7 @@ POST /mcp</div>
 
     <footer class="footer">
       <div>CheckAPI by DataWeave INC. Agent-native compliance middleware.</div>
-      <div style="margin-top:8px;">MCP Discovery: <span class="mono">/.well-known/mcp/servers.json</span></div>
+      <div style="margin-top:8px;">MCP Tool Catalog: <span class="mono">/v1/mcp/tools</span></div>
     </footer>
   </main>
 </body>

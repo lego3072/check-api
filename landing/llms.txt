@@ -18,7 +18,6 @@ It is built MCP-first so agents can discover and call it automatically.
 ## Core Agent Benefits
 - Structured pass/fail + risk score + flagged evidence + remediation
 - One endpoint for single checks and batch checks
-- MCP registry discovery via /.well-known/mcp/servers.json
 - Tool descriptions optimized for automatic LLM tool selection
 
 ## Access + Pricing
@@ -34,7 +33,6 @@ It is built MCP-first so agents can discover and call it automatically.
 - Use `check_batch_compliance` for multi-document or multi-output validation workflows.
 
 ## Discovery Endpoints
-- MCP registry: {{BASE_URL}}/.well-known/mcp/servers.json
 - MCP tool catalog: {{BASE_URL}}/v1/mcp/tools
 - MCP transport: {{BASE_URL}}/mcp
 - OpenAPI: {{BASE_URL}}/openapi.json

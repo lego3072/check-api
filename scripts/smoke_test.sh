@@ -8,9 +8,9 @@ echo "[1/7] health"
 curl -fsS "$BASE_URL/health" >/tmp/checkapi_health.json
 cat /tmp/checkapi_health.json
 
-echo "[2/7] mcp discovery"
-curl -fsS "$BASE_URL/.well-known/mcp/servers.json" >/tmp/checkapi_mcp_servers.json
-cat /tmp/checkapi_mcp_servers.json | head -c 300; echo
+echo "[2/7] docs"
+curl -fsS "$BASE_URL/docs" >/tmp/checkapi_docs.html
+cat /tmp/checkapi_docs.html | head -c 200; echo
 
 echo "[3/7] llms"
 curl -fsS "$BASE_URL/llms.txt" >/tmp/checkapi_llms.txt
