@@ -932,7 +932,7 @@ def render_landing(filename: str) -> str:
 
 def dataweave_stack_payload(base: str) -> dict[str, Any]:
     return {
-        "company": "DataWeave INC",
+        "company": "DataWeaveAI company",
         "stack_name": "DataWeave Agent Stack",
         "message": "Fast path for agents: extract, redact, validate, then route to local service execution.",
         "recommended_order": ["extractapi", "redactapi", "checkapi", "agent-router"],
@@ -1044,6 +1044,69 @@ def docs_page() -> Response:
     if html:
         return Response(html, mimetype="text/html")
     return jsonify({"openapi": external_base_url() + "/openapi.json"})
+
+
+@app.route("/privacy", methods=["GET"])
+def privacy_page() -> Response:
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy | CheckAPI</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #020a16; color: #e2e8f0; }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 24px 16px 40px; }
+    .card { background: #08162a; border: 1px solid #123258; border-radius: 12px; padding: 24px; }
+    a { color: #52d0ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Privacy Policy</h1>
+      <p>CheckAPI processes submitted text and documents to score compliance risk and produce remediation guidance.</p>
+      <p>We use trusted processors for hosting, payments, and notifications. We do not sell personal data.</p>
+      <p>Contact: joseph@dataweaveai.com</p>
+      <p><a href="/">Back to CheckAPI</a></p>
+      <p style="font-size:12px;color:#93c5fd;">CheckAPI is a DataWeaveAI company.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+    return Response(html, mimetype="text/html")
+
+
+@app.route("/terms", methods=["GET"])
+def terms_page() -> Response:
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terms of Service | CheckAPI</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #020a16; color: #e2e8f0; }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 24px 16px 40px; }
+    .card { background: #08162a; border: 1px solid #123258; border-radius: 12px; padding: 24px; }
+    a { color: #52d0ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Terms of Service</h1>
+      <p>By using CheckAPI, you agree to these terms of service.</p>
+      <p>You are responsible for lawful handling of content and final policy decisions based on returned risk outputs.</p>
+      <p>Paid plans and setup services follow Stripe checkout terms and renewal settings.</p>
+      <p>Contact: joseph@dataweaveai.com</p>
+      <p><a href="/">Back to CheckAPI</a></p>
+      <p style="font-size:12px;color:#93c5fd;">CheckAPI is a DataWeaveAI company.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+    return Response(html, mimetype="text/html")
 
 
 @app.route("/openapi.json", methods=["GET"])
@@ -1719,7 +1782,7 @@ def agent_offer() -> Response:
     return jsonify(
         {
             "name": "CheckAPI",
-            "company": "DataWeave INC",
+            "company": "DataWeaveAI company",
             "product_type": "agent-native compliance validation",
             "url": base,
             "value_proposition": (
