@@ -446,6 +446,7 @@
         </div>
         <div class="chip-row">
           <span class="chip">3-step integration</span>
+          <span class="chip">DataWeaveINC 4-service stack</span>
           <span class="chip">/v1/mcp/tools</span>
           <span class="chip">MCP transport endpoint</span>
           <span class="chip">Agent-ready tool descriptions</span>
@@ -538,6 +539,35 @@ Authorization: Bearer ck_***</div>
           <div class="step"><strong>3. Validate</strong>CheckAPI enforces compliance pass/fail criteria.</div>
           <div class="step"><strong>4. Output</strong>Agent returns response with compliance confidence.</div>
         </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>DataWeave Unified Stack</h2>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <h3>ExtractAPI</h3>
+          <p>Convert raw documents into structured JSON fast.</p>
+          <p class="mono" style="margin-top:8px;"><a href="{{EXTRACT_API_URL}}" target="_blank" rel="noreferrer">{{EXTRACT_API_URL}}</a></p>
+        </article>
+        <article class="card">
+          <h3>RedactAPI</h3>
+          <p>Remove PII/PHI before outputs leave your agent flow.</p>
+          <p class="mono" style="margin-top:8px;"><a href="{{REDACT_API_URL}}" target="_blank" rel="noreferrer">{{REDACT_API_URL}}</a></p>
+        </article>
+        <article class="card">
+          <h3>CheckAPI</h3>
+          <p>Validate compliance and block risky answers automatically.</p>
+          <p class="mono" style="margin-top:8px;"><a href="{{BASE_URL}}/v1/mcp/tools">{{BASE_URL}}/v1/mcp/tools</a></p>
+        </article>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <h3>Step 4: Route + transact</h3>
+        <div class="code mono">Agent Router closes the loop by routing approved intents to local providers:
+{{AGENT_ROUTER_URL}}</div>
+        <div class="mono" style="margin-top:8px;">Machine-readable stack manifest: <a href="{{BASE_URL}}/v1/public/stack">{{BASE_URL}}/v1/public/stack</a></div>
       </div>
     </section>
 

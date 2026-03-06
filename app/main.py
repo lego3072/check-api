@@ -50,6 +50,11 @@ PUBLIC_DISCOVERY_ENABLED = env_bool("PUBLIC_DISCOVERY_ENABLED", True)
 INDEXNOW_KEY = os.getenv("INDEXNOW_KEY", "").strip()
 CORS_ALLOW_ORIGINS_RAW = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
 
+DATAWEAVE_HOME_URL = os.getenv("DATAWEAVE_HOME_URL", "https://dataweaveai.com").strip()
+EXTRACT_API_URL = os.getenv("EXTRACT_API_URL", "https://extractapi.net").strip()
+REDACT_API_URL = os.getenv("REDACT_API_URL", "https://redactapi.dev").strip()
+AGENT_ROUTER_URL = os.getenv("AGENT_ROUTER_URL", "https://get-agent-router.com").strip()
+
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 FOLLOWUP_INBOX_EMAIL = os.getenv("FOLLOWUP_INBOX_EMAIL", "joseph@dataweaveai.com").strip()
 FOLLOWUP_FROM_EMAIL = os.getenv("FOLLOWUP_FROM_EMAIL", "CheckAPI <noreply@checkapi.dev>").strip()
@@ -914,11 +919,61 @@ def render_landing(filename: str) -> str:
     html = page.read_text(encoding="utf-8")
     return (
         html.replace("{{BASE_URL}}", base)
+        .replace("{{DATAWEAVE_HOME_URL}}", DATAWEAVE_HOME_URL)
+        .replace("{{EXTRACT_API_URL}}", EXTRACT_API_URL)
+        .replace("{{REDACT_API_URL}}", REDACT_API_URL)
+        .replace("{{AGENT_ROUTER_URL}}", AGENT_ROUTER_URL)
         .replace("{{SETUP_PAYMENT_LINK}}", SETUP_PAYMENT_LINK)
         .replace("{{STARTER_PAYMENT_LINK}}", STARTER_PAYMENT_LINK)
         .replace("{{PRO_PAYMENT_LINK}}", PRO_PAYMENT_LINK)
         .replace("{{SCALE_PAYMENT_LINK}}", SCALE_PAYMENT_LINK)
     )
+
+
+def dataweave_stack_payload(base: str) -> dict[str, Any]:
+    return {
+        "company": "DataWeave INC",
+        "stack_name": "DataWeave Agent Stack",
+        "message": "Fast path for agents: extract, redact, validate, then route to local service execution.",
+        "recommended_order": ["extractapi", "redactapi", "checkapi", "agent-router"],
+        "services": [
+            {
+                "id": "extractapi",
+                "name": "ExtractAPI",
+                "url": EXTRACT_API_URL,
+                "purpose": "Schema-based document extraction into structured JSON.",
+                "typical_use": "Turn PDFs/images into machine-usable fields.",
+            },
+            {
+                "id": "redactapi",
+                "name": "RedactAPI",
+                "url": REDACT_API_URL,
+                "purpose": "PII/PHI redaction before downstream actions.",
+                "typical_use": "Mask sensitive data to reduce risk and compliance exposure.",
+            },
+            {
+                "id": "checkapi",
+                "name": "CheckAPI",
+                "url": base,
+                "purpose": "Compliance guardrail validation for outputs and docs.",
+                "typical_use": "Return pass/fail, risk score, flags, and remediation before final response.",
+            },
+            {
+                "id": "agent-router",
+                "name": "Agent Router",
+                "url": AGENT_ROUTER_URL,
+                "purpose": "Intent routing and local service transaction middleware.",
+                "typical_use": "Route qualified intents to providers and close service jobs.",
+            },
+        ],
+        "discovery": {
+            "checkapi_tools": f"{base}/v1/mcp/tools",
+            "checkapi_transport": f"{base}/mcp",
+            "checkapi_openapi": f"{base}/openapi.json",
+            "checkapi_docs": f"{base}/docs",
+            "stack_manifest": f"{base}/v1/public/stack",
+        },
+    }
 
 
 @app.before_request
@@ -1044,6 +1099,17 @@ def openapi_spec() -> Response:
                         "checkout_url": {"type": "string"},
                         "plan": {"type": "string"},
                         "captured": {"type": "boolean"},
+                    },
+                },
+                "StackResponse": {
+                    "type": "object",
+                    "properties": {
+                        "company": {"type": "string"},
+                        "stack_name": {"type": "string"},
+                        "message": {"type": "string"},
+                        "recommended_order": {"type": "array", "items": {"type": "string"}},
+                        "services": {"type": "array", "items": {"type": "object"}},
+                        "discovery": {"type": "object"},
                     },
                 },
                 "CheckRequest": {
@@ -1206,6 +1272,17 @@ def openapi_spec() -> Response:
                             "description": "Rate limited",
                             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
                         },
+                    },
+                }
+            },
+            "/v1/public/stack": {
+                "get": {
+                    "summary": "DataWeave unified 4-service agent stack manifest",
+                    "responses": {
+                        "200": {
+                            "description": "Stack manifest for agents/orchestrators",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StackResponse"}}},
+                        }
                     },
                 }
             },
@@ -1853,6 +1930,20 @@ def verify_session() -> Response:
         return jsonify({"verified": False, "reason": "Payment verification failed"})
 
 
+@app.route("/v1/public/stack", methods=["GET"])
+def public_stack() -> Response:
+    base = external_base_url()
+    return jsonify(dataweave_stack_payload(base))
+
+
+@app.route("/.well-known/dataweave-stack.json", methods=["GET"])
+def dataweave_stack_well_known() -> Response:
+    if not PUBLIC_DISCOVERY_ENABLED:
+        return jsonify({"detail": "Not found"}), 404
+    base = external_base_url()
+    return jsonify(dataweave_stack_payload(base))
+
+
 @app.route("/v1/public/config", methods=["GET"])
 def public_config() -> Response:
     return jsonify(
@@ -1864,6 +1955,13 @@ def public_config() -> Response:
             "starter_payment_link": STARTER_PAYMENT_LINK,
             "pro_payment_link": PRO_PAYMENT_LINK,
             "scale_payment_link": SCALE_PAYMENT_LINK,
+            "stack_manifest": external_base_url() + "/v1/public/stack",
+            "stack_services": {
+                "dataweave_home": DATAWEAVE_HOME_URL,
+                "extractapi": EXTRACT_API_URL,
+                "redactapi": REDACT_API_URL,
+                "agent_router": AGENT_ROUTER_URL,
+            },
             "plans": {
                 "free": 500,
                 "starter": 5000,
@@ -1885,6 +1983,8 @@ def robots() -> Response:
         "User-agent: *\n"
         "Allow: /\n"
         "Allow: /v1/mcp/tools\n"
+        "Allow: /v1/public/stack\n"
+        "Allow: /.well-known/dataweave-stack.json\n"
         "Allow: /llms.txt\n"
         "Disallow: /v1/\n"
         "Disallow: /api/\n"
@@ -1900,7 +2000,14 @@ def llms() -> Response:
     path = LANDING_DIR / "llms.txt"
     if not path.exists():
         return Response("# CheckAPI\nAgent-native compliance guardrail", mimetype="text/plain")
-    content = path.read_text(encoding="utf-8").replace("{{BASE_URL}}", external_base_url())
+    content = (
+        path.read_text(encoding="utf-8")
+        .replace("{{BASE_URL}}", external_base_url())
+        .replace("{{DATAWEAVE_HOME_URL}}", DATAWEAVE_HOME_URL)
+        .replace("{{EXTRACT_API_URL}}", EXTRACT_API_URL)
+        .replace("{{REDACT_API_URL}}", REDACT_API_URL)
+        .replace("{{AGENT_ROUTER_URL}}", AGENT_ROUTER_URL)
+    )
     return Response(content, mimetype="text/plain")
 
 
@@ -1917,6 +2024,8 @@ def sitemap() -> Response:
         f"{base}/docs",
         f"{base}/llms.txt",
         f"{base}/v1/mcp/tools",
+        f"{base}/v1/public/stack",
+        f"{base}/.well-known/dataweave-stack.json",
         f"{base}/openapi.json",
     ]
     rows = "\n".join([f"  <url><loc>{u}</loc></url>" for u in urls])

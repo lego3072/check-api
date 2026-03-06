@@ -82,6 +82,16 @@ Call check_compliance with the full output text.
 If risk_score >= 30 or pass=false, return remediation recommendations and hold final answer.</pre>
     </div>
 
+    <div class="card">
+      <h3>DataWeave 4-service flow (fastest production path)</h3>
+      <pre class="mono">1) ExtractAPI: {{EXTRACT_API_URL}}
+2) RedactAPI: {{REDACT_API_URL}}
+3) CheckAPI: {{BASE_URL}}
+4) Agent Router: {{AGENT_ROUTER_URL}}</pre>
+      <p>Stack manifest for agents/orchestrators: <a href="{{BASE_URL}}/v1/public/stack">{{BASE_URL}}/v1/public/stack</a></p>
+      <p>Well-known discovery file: <a href="{{BASE_URL}}/.well-known/dataweave-stack.json">{{BASE_URL}}/.well-known/dataweave-stack.json</a></p>
+    </div>
+
     <p><a href="/">Back to site</a></p>
   </div>
 </body>

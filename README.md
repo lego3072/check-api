@@ -36,6 +36,8 @@ Returns structured JSON with:
 - `GET /api/billing/verify-session` - verify checkout session status
 - `GET /v1/mcp/tools` - tool definitions for agent frameworks
 - `POST /mcp` - MCP JSON-RPC transport
+- `GET /v1/public/stack` - DataWeave unified stack manifest for agents
+- `GET /.well-known/dataweave-stack.json` - well-known stack discovery file
 
 ## Pricing model (default)
 
@@ -75,6 +77,10 @@ Set variables (example):
 ```bash
 railway variable set PUBLIC_BASE_URL="https://checkapi.dev" --service check-api
 railway variable set CORS_ALLOW_ORIGINS="https://checkapi.dev" --service check-api
+railway variable set DATAWEAVE_HOME_URL="https://dataweaveai.com" --service check-api
+railway variable set EXTRACT_API_URL="https://extractapi.net" --service check-api
+railway variable set REDACT_API_URL="https://redactapi.dev" --service check-api
+railway variable set AGENT_ROUTER_URL="https://get-agent-router.com" --service check-api
 railway variable set PUBLIC_DOCS_ENABLED="true" --service check-api
 railway variable set PUBLIC_DISCOVERY_ENABLED="true" --service check-api
 railway variable set RESEND_API_KEY="re_..." --service check-api
@@ -113,6 +119,13 @@ railway variable set SCALE_PAYMENT_LINK="https://buy.stripe.com/..." --service c
 - Free-tier abuse controls: per-IP/day signup caps and free-tier daily usage cap
 - Global daily capacity cap protects margin during traffic spikes
 - Usage responses include `upgrade_recommended` + `upgrade_url` for fast conversion
+
+## Unified stack for agents
+
+All four related services can be discovered and used as one fast pipeline:
+- ExtractAPI -> RedactAPI -> CheckAPI -> Agent Router
+- Manifest endpoint: `/v1/public/stack`
+- Well-known file: `/.well-known/dataweave-stack.json`
 
 ## Suggested first registries to submit
 
