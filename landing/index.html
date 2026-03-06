@@ -180,6 +180,32 @@
       padding: 10px 14px;
     }
 
+    .bundle-strip {
+      margin: 16px 0 0;
+      border: 1px solid #2f6682;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(52, 212, 196, 0.14), rgba(59, 130, 246, 0.1));
+      padding: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .bundle-strip strong {
+      font-size: 15px;
+      letter-spacing: 0.2px;
+    }
+    .bundle-strip span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .bundle-strip .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     .hero {
       padding: 74px 0 28px;
       display: grid;
@@ -438,7 +464,7 @@
       <div class="nav-links">
         <a href="#quickstart">Quickstart</a>
         <a href="#pricing">Pricing</a>
-        <a href="https://get-agent-router.com/#bundle-front" target="_blank" rel="noreferrer">4-Tool Bundle</a>
+        <a href="{{AGENT_ROUTER_BUNDLE_DASHBOARD_URL}}" target="_blank" rel="noreferrer">Bundle Dashboard</a>
         <a href="/docs" class="btn btn-muted">Docs</a>
         <a href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" class="btn btn-primary" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Start $29</a>
       </div>
@@ -446,10 +472,21 @@
   </nav>
 
   <main class="wrap">
+    <section class="bundle-strip">
+      <div>
+        <strong>4-Tool DataWeave Bundle: $656/mo or $3,156 full launch today</strong><br>
+        <span>Extract + Redact + Check + Agent Router in one implementation path built for faster cash flow.</span>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary" href="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}" target="_blank" rel="noreferrer">Start Bundle ($656/mo)</a>
+        <a class="btn btn-muted" href="{{AGENT_ROUTER_BUNDLE_FULL_URL}}" target="_blank" rel="noreferrer">Full Launch ($3,156)</a>
+      </div>
+    </section>
+
     <section class="hero">
       <div>
         <div class="pill">First mover: Compliance category for MCP servers</div>
-        <div class="bundle-pill">4-tool revenue bundle from $656/mo: Extract + Redact + Check + Agent Router</div>
+        <div class="bundle-pill">Bundle now: $656/mo, or full launch at $3,156 today then $656/mo</div>
         <h1>Deploy agent compliance checks in minutes.</h1>
         <p>
           CheckAPI validates outputs against GDPR, HIPAA, CCPA, SOC2, and ADA,
@@ -458,7 +495,7 @@
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Start Starter ($29)</a>
-          <a class="btn btn-muted" href="https://get-agent-router.com/#bundle-front" target="_blank" rel="noreferrer">See Full 4-Tool Bundle</a>
+          <a class="btn btn-muted" href="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}" target="_blank" rel="noreferrer">Start 4-Tool Bundle ($656/mo)</a>
           <a class="btn btn-muted" href="/docs">View Docs / Free Key</a>
         </div>
         <div class="chip-row">
@@ -484,7 +521,8 @@ Authenticated runtime checks</div>
             <button class="btn btn-primary" data-plan="starter" data-fallback="{{STARTER_PAYMENT_LINK}}">Starter $29</button>
             <button class="btn btn-muted" data-plan="pro" data-fallback="{{PRO_PAYMENT_LINK}}">Pro $99</button>
             <button class="btn btn-muted" data-plan="scale" data-fallback="{{SCALE_PAYMENT_LINK}}">Scale $299</button>
-            <button class="btn btn-muted" data-plan="setup" data-fallback="{{SETUP_PAYMENT_LINK}}">Done-For-You Setup</button>
+            <button class="btn btn-muted" data-plan="bundle_monthly" data-fallback="{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}">4-Tool Bundle $656/mo</button>
+            <button class="btn btn-muted" data-plan="bundle_full" data-fallback="{{AGENT_ROUTER_BUNDLE_FULL_URL}}">4-Tool Full Launch $3,156</button>
           </div>
           <div id="quick-note" class="quick-note">Direct Stripe checkout with no email prompt.</div>
         </div>

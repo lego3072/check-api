@@ -54,6 +54,15 @@ DATAWEAVE_HOME_URL = os.getenv("DATAWEAVE_HOME_URL", "https://dataweaveai.com").
 EXTRACT_API_URL = os.getenv("EXTRACT_API_URL", "https://extractapi.net").strip()
 REDACT_API_URL = os.getenv("REDACT_API_URL", "https://redactapi.dev").strip()
 AGENT_ROUTER_URL = os.getenv("AGENT_ROUTER_URL", "https://get-agent-router.com").strip()
+AGENT_ROUTER_BUNDLE_MONTHLY_URL = os.getenv(
+    "AGENT_ROUTER_BUNDLE_MONTHLY_URL", f"{AGENT_ROUTER_URL.rstrip('/')}/api/stripe/bundle-monthly-checkout"
+).strip()
+AGENT_ROUTER_BUNDLE_FULL_URL = os.getenv(
+    "AGENT_ROUTER_BUNDLE_FULL_URL", f"{AGENT_ROUTER_URL.rstrip('/')}/api/stripe/bundle-full-checkout"
+).strip()
+AGENT_ROUTER_BUNDLE_DASHBOARD_URL = os.getenv(
+    "AGENT_ROUTER_BUNDLE_DASHBOARD_URL", f"{AGENT_ROUTER_URL.rstrip('/')}/bundle"
+).strip()
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 FOLLOWUP_INBOX_EMAIL = os.getenv("FOLLOWUP_INBOX_EMAIL", "joseph@dataweaveai.com").strip()
@@ -923,6 +932,9 @@ def render_landing(filename: str) -> str:
         .replace("{{EXTRACT_API_URL}}", EXTRACT_API_URL)
         .replace("{{REDACT_API_URL}}", REDACT_API_URL)
         .replace("{{AGENT_ROUTER_URL}}", AGENT_ROUTER_URL)
+        .replace("{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}", AGENT_ROUTER_BUNDLE_MONTHLY_URL)
+        .replace("{{AGENT_ROUTER_BUNDLE_FULL_URL}}", AGENT_ROUTER_BUNDLE_FULL_URL)
+        .replace("{{AGENT_ROUTER_BUNDLE_DASHBOARD_URL}}", AGENT_ROUTER_BUNDLE_DASHBOARD_URL)
         .replace("{{SETUP_PAYMENT_LINK}}", SETUP_PAYMENT_LINK)
         .replace("{{STARTER_PAYMENT_LINK}}", STARTER_PAYMENT_LINK)
         .replace("{{PRO_PAYMENT_LINK}}", PRO_PAYMENT_LINK)
@@ -971,6 +983,13 @@ def dataweave_stack_payload(base: str) -> dict[str, Any]:
             "checkapi_openapi": f"{base}/openapi.json",
             "checkapi_docs": f"{base}/docs",
             "stack_manifest": f"{base}/v1/public/stack",
+        },
+        "bundle": {
+            "monthly_usd": 656,
+            "full_launch_due_today_usd": 3156,
+            "monthly_checkout": AGENT_ROUTER_BUNDLE_MONTHLY_URL,
+            "full_launch_checkout": AGENT_ROUTER_BUNDLE_FULL_URL,
+            "dashboard": AGENT_ROUTER_BUNDLE_DASHBOARD_URL,
         },
     }
 
@@ -1795,6 +1814,7 @@ def agent_offer() -> Response:
                 "scale_usd_month": 299,
                 "done_for_you_setup_usd": 2500,
                 "full_stack_starter_usd_month": 656,
+                "full_stack_launch_due_today_usd": 3156,
             },
             "primary_paths": [
                 {
@@ -1812,6 +1832,16 @@ def agent_offer() -> Response:
                     "cta": SETUP_PAYMENT_LINK,
                     "description": "Managed setup and onboarding by DataWeave team.",
                 },
+                {
+                    "path": "dataweave_bundle_monthly",
+                    "cta": AGENT_ROUTER_BUNDLE_MONTHLY_URL,
+                    "description": "Start all 4 DataWeave services at $656/month.",
+                },
+                {
+                    "path": "dataweave_bundle_full_launch",
+                    "cta": AGENT_ROUTER_BUNDLE_FULL_URL,
+                    "description": "Pay $3,156 today (setup + first month), then $656/month.",
+                },
             ],
             "free_path": {"cta": f"{base}/docs", "description": "Generate free key and test MCP/REST."},
             "discoverability": {
@@ -1823,6 +1853,9 @@ def agent_offer() -> Response:
                 "extractapi": EXTRACT_API_URL,
                 "redactapi": REDACT_API_URL,
                 "agent_router": AGENT_ROUTER_URL,
+                "bundle_dashboard": AGENT_ROUTER_BUNDLE_DASHBOARD_URL,
+                "bundle_monthly_checkout": AGENT_ROUTER_BUNDLE_MONTHLY_URL,
+                "bundle_full_checkout": AGENT_ROUTER_BUNDLE_FULL_URL,
             },
             "security": {"api_key_required": True, "rate_limited": True, "public_discovery": PUBLIC_DISCOVERY_ENABLED},
         }
@@ -2079,6 +2112,13 @@ def public_config() -> Response:
                 "redactapi": REDACT_API_URL,
                 "agent_router": AGENT_ROUTER_URL,
             },
+            "bundle": {
+                "monthly_usd": 656,
+                "full_launch_due_today_usd": 3156,
+                "dashboard_url": AGENT_ROUTER_BUNDLE_DASHBOARD_URL,
+                "monthly_checkout_url": AGENT_ROUTER_BUNDLE_MONTHLY_URL,
+                "full_launch_checkout_url": AGENT_ROUTER_BUNDLE_FULL_URL,
+            },
             "plans": {
                 "free": 500,
                 "starter": 5000,
@@ -2124,6 +2164,9 @@ def llms() -> Response:
         .replace("{{EXTRACT_API_URL}}", EXTRACT_API_URL)
         .replace("{{REDACT_API_URL}}", REDACT_API_URL)
         .replace("{{AGENT_ROUTER_URL}}", AGENT_ROUTER_URL)
+        .replace("{{AGENT_ROUTER_BUNDLE_MONTHLY_URL}}", AGENT_ROUTER_BUNDLE_MONTHLY_URL)
+        .replace("{{AGENT_ROUTER_BUNDLE_FULL_URL}}", AGENT_ROUTER_BUNDLE_FULL_URL)
+        .replace("{{AGENT_ROUTER_BUNDLE_DASHBOARD_URL}}", AGENT_ROUTER_BUNDLE_DASHBOARD_URL)
     )
     return Response(content, mimetype="text/plain")
 
