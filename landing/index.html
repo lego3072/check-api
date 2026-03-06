@@ -38,6 +38,39 @@
   }
   </script>
 
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do I add compliance validation to an AI agent quickly?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Create a free API key, call /v1/mcp/tools, then call /mcp with tool name check_compliance before final responses."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What regulations does CheckAPI support?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "CheckAPI supports GDPR, HIPAA, CCPA, SOC2, and ADA validation with pass/fail, risk score, and remediation output."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can autonomous agents call CheckAPI directly?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Agents can call CheckAPI over MCP JSON-RPC or REST with API-key auth and structured JSON responses."
+        }
+      }
+    ]
+  }
+  </script>
+
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
@@ -350,7 +383,7 @@
         <span>CheckAPI</span>
       </a>
       <div class="nav-links">
-        <a href="#mcp">MCP</a>
+        <a href="#quickstart">Quickstart</a>
         <a href="#pricing">Pricing</a>
         <a href="/docs" class="btn btn-muted">Docs</a>
         <a href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer" class="btn btn-primary">Start $29</a>
@@ -362,17 +395,18 @@
     <section class="hero">
       <div>
         <div class="pill">First mover: Compliance category for MCP servers</div>
-        <h1>Compliance guardrails agents call automatically.</h1>
+        <h1>Deploy agent compliance checks in minutes.</h1>
         <p>
           CheckAPI validates outputs against GDPR, HIPAA, CCPA, SOC2, and ADA,
           then returns pass/fail, risk scores, evidence, and remediation in structured JSON.
-          Built MCP-first so frameworks and agent builders can plug it in quickly.
+          Built for agent builders who need a fast pre-response guardrail with no enterprise setup cycle.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer">Get API Key</a>
-          <a class="btn btn-muted" href="/docs">Read Integration Docs</a>
+          <a class="btn btn-primary" href="/docs">Start Free API Key</a>
+          <a class="btn btn-muted" href="{{STARTER_PAYMENT_LINK}}" target="_blank" rel="noreferrer">Upgrade to Starter</a>
         </div>
         <div class="chip-row">
+          <span class="chip">3-step integration</span>
           <span class="chip">/v1/mcp/tools</span>
           <span class="chip">MCP transport endpoint</span>
           <span class="chip">Agent-ready tool descriptions</span>
@@ -396,17 +430,50 @@ POST /mcp</div>
       </div>
       <div class="cards">
         <article class="card">
-          <h3>One-Click Discovery</h3>
-          <p>Agents and frameworks can discover the server from your domain-level MCP registry route and tool catalog.</p>
+          <h3>Fast Discovery</h3>
+          <p>Agent builders can fetch tools from <span class="mono">/v1/mcp/tools</span> and execute checks through <span class="mono">/mcp</span>.</p>
         </article>
         <article class="card">
-          <h3>Automatic Guardrail Call</h3>
-          <p>Prompt snippets and middleware hooks can enforce compliance checks before final responses.</p>
+          <h3>Forced Pre-Response Validation</h3>
+          <p>Prompt snippets and middleware enforce check_compliance before final output, preventing unsafe completions.</p>
         </article>
         <article class="card">
           <h3>Structured Risk Output</h3>
           <p>Every check returns pass/fail, risk score, flagged evidence, and specific remediation actions.</p>
         </article>
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <div class="section-head">
+        <h2>Agent Quickstart</h2>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="mono">Step 1: Create key (free)</div>
+          <div class="code mono">POST /api/signup
+{"email":"agent-builder@company.com"}</div>
+          <div class="mono" style="margin-top:10px;">Step 2: Fetch tools</div>
+          <div class="code mono">GET /v1/mcp/tools
+Authorization: Bearer ck_***</div>
+          <div class="mono" style="margin-top:10px;">Step 3: Validate every final output</div>
+          <div class="code mono">POST /mcp
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"check_compliance","arguments":{"text":"FINAL_OUTPUT"}}}</div>
+        </div>
+        <div class="panel">
+          <h3>Implementation Rule</h3>
+          <div class="code mono">If pass=false OR risk_score >= 30:
+- block final response
+- return remediation guidance
+- request revision from the model</div>
+          <h3 style="margin-top:12px;">Works With</h3>
+          <div class="chip-row">
+            <span class="chip">LangChain</span>
+            <span class="chip">CrewAI</span>
+            <span class="chip">Microsoft Agent Framework</span>
+            <span class="chip">Custom Python/Node agents</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -493,7 +560,7 @@ POST /mcp</div>
 
     <footer class="footer">
       <div>CheckAPI by DataWeave INC. Agent-native compliance middleware.</div>
-      <div style="margin-top:8px;">MCP Tool Catalog: <span class="mono">/v1/mcp/tools</span></div>
+      <div style="margin-top:8px;">Quickstart: <span class="mono">/docs</span> | Tool catalog: <span class="mono">/v1/mcp/tools</span></div>
     </footer>
   </main>
 </body>

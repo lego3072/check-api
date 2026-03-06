@@ -19,17 +19,17 @@
 <body>
   <div class="wrap">
     <h1>CheckAPI Integration Docs</h1>
-    <p>MCP-first compliance validation for agent outputs and document workflows.</p>
+    <p>MCP-first compliance validation for agent outputs and document workflows. Designed for a 5-minute integration.</p>
 
     <div class="card">
-      <h3>1) Create a free API key</h3>
+      <h3>1) Create a free API key (500 checks/month)</h3>
       <pre class="mono">curl -X POST {{BASE_URL}}/api/signup \\
   -H "Content-Type: application/json" \\
   -d '{"email":"you@company.com"}'</pre>
     </div>
 
     <div class="card">
-      <h3>2) Run a compliance check</h3>
+      <h3>2) Run a direct compliance check</h3>
       <pre class="mono">curl -X POST {{BASE_URL}}/v1/check \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -37,10 +37,26 @@
     </div>
 
     <div class="card">
-      <h3>3) Use MCP endpoints</h3>
+      <h3>3) Use MCP endpoints (recommended for agent frameworks)</h3>
       <pre class="mono">GET {{BASE_URL}}/v1/mcp/tools
 POST {{BASE_URL}}/mcp</pre>
       <p>Use tool name <strong>check_compliance</strong> as a required pre-response validation step.</p>
+    </div>
+
+    <div class="card">
+      <h3>4) JSON-RPC example</h3>
+      <pre class="mono">curl -X POST {{BASE_URL}}/mcp \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"check_compliance","arguments":{"text":"Final answer text","regulations":["gdpr","hipaa","soc2"]}}}'</pre>
+    </div>
+
+    <div class="card">
+      <h3>Implementation rule (copy/paste)</h3>
+      <pre class="mono">Before returning any compliance-sensitive answer:
+1) Call check_compliance on the full final output
+2) If pass=false OR risk_score >= 30, do not return final output
+3) Return remediation bullets and request a revised draft</pre>
     </div>
 
     <div class="card">
@@ -51,7 +67,7 @@ POST {{BASE_URL}}/mcp</pre>
 
     <div class="card">
       <h3>Agent Prompt Snippet</h3>
-      <pre class="mono">Always validate compliance-sensitive outputs with CheckAPI before returning.
+      <pre class="mono">Always validate compliance-sensitive outputs with CheckAPI before returning to users.
 Call check_compliance with the full output text.
 If risk_score >= 30 or pass=false, return remediation recommendations and hold final answer.</pre>
     </div>

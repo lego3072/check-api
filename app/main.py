@@ -627,15 +627,285 @@ def openapi_spec() -> Response:
         "info": {
             "title": "CheckAPI",
             "version": "1.0.0",
-            "description": "Agent-native compliance guardrail API",
+            "description": "Agent-native compliance guardrail API for GDPR, HIPAA, CCPA, SOC2, and ADA validation.",
         },
         "servers": [{"url": base}],
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {"type": "http", "scheme": "bearer"},
+                "ApiKeyHeader": {"type": "apiKey", "in": "header", "name": "X-API-Key"},
+            },
+            "schemas": {
+                "SignupRequest": {
+                    "type": "object",
+                    "properties": {"email": {"type": "string", "format": "email"}},
+                    "required": ["email"],
+                },
+                "SignupResponse": {
+                    "type": "object",
+                    "properties": {
+                        "api_key": {"type": "string"},
+                        "plan": {"type": "string"},
+                        "checks_per_month": {"type": "integer"},
+                    },
+                },
+                "CheckRequest": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "Text to validate"},
+                        "regulations": {
+                            "oneOf": [
+                                {"type": "array", "items": {"type": "string"}},
+                                {"type": "string"},
+                            ]
+                        },
+                        "content_type": {"type": "string", "description": "contract, policy, output, email, chat"},
+                    },
+                    "required": ["text"],
+                },
+                "CheckFlag": {
+                    "type": "object",
+                    "properties": {
+                        "rule_id": {"type": "string"},
+                        "regulation": {"type": "string"},
+                        "title": {"type": "string"},
+                        "severity": {"type": "string"},
+                        "evidence": {"type": "string"},
+                        "recommendation": {"type": "string"},
+                    },
+                },
+                "CheckResult": {
+                    "type": "object",
+                    "properties": {
+                        "pass": {"type": "boolean"},
+                        "risk_score": {"type": "integer"},
+                        "severity": {"type": "string"},
+                        "content_type": {"type": "string"},
+                        "flag_count": {"type": "integer"},
+                        "flags": {"type": "array", "items": {"$ref": "#/components/schemas/CheckFlag"}},
+                        "regulation_summary": {"type": "object"},
+                        "checked_at": {"type": "string"},
+                        "request_id": {"type": "string"},
+                    },
+                },
+                "BatchItem": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "text": {"type": "string"},
+                        "content_type": {"type": "string"},
+                    },
+                    "required": ["text"],
+                },
+                "BatchRequest": {
+                    "type": "object",
+                    "properties": {
+                        "items": {"type": "array", "items": {"$ref": "#/components/schemas/BatchItem"}},
+                        "regulations": {
+                            "oneOf": [
+                                {"type": "array", "items": {"type": "string"}},
+                                {"type": "string"},
+                            ]
+                        },
+                    },
+                    "required": ["items"],
+                },
+                "BatchResponse": {
+                    "type": "object",
+                    "properties": {
+                        "total": {"type": "integer"},
+                        "successful": {"type": "integer"},
+                        "results": {"type": "array", "items": {"type": "object"}},
+                    },
+                },
+                "UsageResponse": {
+                    "type": "object",
+                    "properties": {
+                        "plan": {"type": "string"},
+                        "checks_used_this_month": {"type": "integer"},
+                        "checks_limit": {"type": "integer"},
+                        "checks_remaining": {"type": "integer"},
+                        "max_chars": {"type": "integer"},
+                        "batch_limit": {"type": "integer"},
+                        "billing_period": {"type": "string"},
+                    },
+                },
+                "MCPToolsResponse": {
+                    "type": "object",
+                    "properties": {
+                        "tools": {"type": "array", "items": {"type": "object"}},
+                    },
+                },
+                "MCPRequest": {
+                    "type": "object",
+                    "properties": {
+                        "jsonrpc": {"type": "string"},
+                        "id": {},
+                        "method": {"type": "string", "description": "tools/list or tools/call"},
+                        "params": {"type": "object"},
+                    },
+                    "required": ["method"],
+                },
+                "ErrorResponse": {
+                    "type": "object",
+                    "properties": {"detail": {"type": "string"}},
+                },
+            },
+        },
         "paths": {
-            "/v1/check": {"post": {"summary": "Single compliance validation"}},
-            "/v1/batch": {"post": {"summary": "Batch compliance validation"}},
-            "/v1/usage": {"get": {"summary": "Usage and plan status"}},
-            "/v1/mcp/tools": {"get": {"summary": "Tool catalog for MCP agents"}},
-            "/mcp": {"post": {"summary": "MCP JSON-RPC transport endpoint"}},
+            "/api/signup": {
+                "post": {
+                    "summary": "Create free API key",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/SignupRequest"},
+                                "example": {"email": "agent-builder@company.com"},
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "API key created or returned",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SignupResponse"}}},
+                        },
+                        "400": {
+                            "description": "Invalid input",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                    },
+                }
+            },
+            "/v1/check": {
+                "post": {
+                    "summary": "Single compliance validation",
+                    "security": [{"BearerAuth": []}, {"ApiKeyHeader": []}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/CheckRequest"},
+                                "example": {
+                                    "text": "We process health data and biometric data.",
+                                    "regulations": ["gdpr", "hipaa"],
+                                    "content_type": "contract",
+                                },
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Validation result",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CheckResult"}}},
+                        },
+                        "400": {
+                            "description": "Invalid input",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                        "429": {
+                            "description": "Monthly quota exceeded",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                    },
+                }
+            },
+            "/v1/batch": {
+                "post": {
+                    "summary": "Batch compliance validation",
+                    "security": [{"BearerAuth": []}, {"ApiKeyHeader": []}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/BatchRequest"},
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Batch validation result",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BatchResponse"}}},
+                        },
+                        "400": {
+                            "description": "Invalid input",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                        "429": {
+                            "description": "Monthly quota exceeded",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                    },
+                }
+            },
+            "/v1/usage": {
+                "get": {
+                    "summary": "Usage and plan status",
+                    "security": [{"BearerAuth": []}, {"ApiKeyHeader": []}],
+                    "responses": {
+                        "200": {
+                            "description": "Usage info",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UsageResponse"}}},
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                        },
+                    },
+                }
+            },
+            "/v1/mcp/tools": {
+                "get": {
+                    "summary": "Tool catalog for MCP agents",
+                    "responses": {
+                        "200": {
+                            "description": "Tool catalog",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MCPToolsResponse"}}},
+                        }
+                    },
+                }
+            },
+            "/mcp": {
+                "post": {
+                    "summary": "MCP JSON-RPC transport endpoint",
+                    "security": [{"BearerAuth": []}, {"ApiKeyHeader": []}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/MCPRequest"},
+                                "examples": {
+                                    "tools_list": {"value": {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}},
+                                    "tools_call": {
+                                        "value": {
+                                            "jsonrpc": "2.0",
+                                            "id": 2,
+                                            "method": "tools/call",
+                                            "params": {
+                                                "name": "check_compliance",
+                                                "arguments": {"text": "Generated response body", "regulations": ["gdpr", "soc2"]},
+                                            },
+                                        }
+                                    },
+                                },
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {"description": "JSON-RPC response"},
+                        "401": {"description": "Missing or invalid API key"},
+                        "429": {"description": "Monthly quota exceeded"},
+                    },
+                }
+            },
         },
     }
     return jsonify(spec)
