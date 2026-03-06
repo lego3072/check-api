@@ -1789,6 +1789,13 @@ def agent_offer() -> Response:
                 "MCP-first compliance guardrail for AI agents with pass/fail, risk scoring, "
                 "evidence flags, and remediation output."
             ),
+            "pricing": {
+                "free_checks_per_month": 500,
+                "starter_usd_month": 29,
+                "pro_usd_month": 99,
+                "scale_usd_month": 299,
+                "done_for_you_setup_usd": 2500,
+            },
             "primary_paths": [
                 {
                     "path": "self_serve_starter",
@@ -1812,6 +1819,11 @@ def agent_offer() -> Response:
                 "openapi": f"{base}/openapi.json",
                 "mcp_tools": f"{base}/v1/mcp/tools",
                 "stack_manifest": f"{base}/v1/public/stack",
+            },
+            "bundle_links": {
+                "extractapi": EXTRACT_API_URL,
+                "redactapi": REDACT_API_URL,
+                "agent_router": AGENT_ROUTER_URL,
             },
             "security": {"api_key_required": True, "rate_limited": True, "public_discovery": PUBLIC_DISCOVERY_ENABLED},
         }
