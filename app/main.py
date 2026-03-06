@@ -1002,7 +1002,8 @@ def after_request(resp: Response):
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     resp.headers["X-XSS-Protection"] = "0"
-    if request.is_secure:
+    proto = request.headers.get("X-Forwarded-Proto", "").lower()
+    if request.is_secure or proto == "https":
         resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     if resp.mimetype == "text/html":
         resp.headers["Content-Security-Policy"] = (
