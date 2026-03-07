@@ -205,6 +205,31 @@
       flex-wrap: wrap;
       gap: 8px;
     }
+    .checkout-email-bar {
+      margin: 74px 0 0;
+      border: 1px solid rgba(52, 212, 196, 0.35);
+      border-radius: 14px;
+      background: rgba(12, 31, 41, 0.9);
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .checkout-email-bar label {
+      font-size: 13px;
+      color: var(--muted);
+      min-width: 220px;
+    }
+    .checkout-email-bar input {
+      flex: 1 1 260px;
+      min-width: 220px;
+      border: 1px solid var(--line);
+      background: #081922;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 11px;
+    }
 
     .roi-proof {
       margin-top: 14px;
@@ -516,6 +541,11 @@
   </nav>
 
   <main class="wrap">
+    <section class="checkout-email-bar">
+      <label for="checkout-email">Work email for instant activation</label>
+      <input id="checkout-email" type="email" placeholder="you@company.com" autocomplete="email" />
+    </section>
+
     <section class="bundle-strip">
       <div>
         <strong>4-Tool DataWeave Bundle: $656/mo or $3,156 full launch today</strong><br>
@@ -783,12 +813,38 @@ Authorization: Bearer ck_***</div>
   </main>
   <script>
   (function () {
+    const CHECKOUT_EMAIL_KEY = "checkapi_checkout_email";
+    function resolveCheckoutEmail() {
+      const input = document.getElementById("checkout-email");
+      const value = ((input && input.value) || localStorage.getItem(CHECKOUT_EMAIL_KEY) || "").trim().toLowerCase();
+      if (!value || !value.includes("@")) return "";
+      localStorage.setItem(CHECKOUT_EMAIL_KEY, value);
+      if (input && !input.value) input.value = value;
+      return value;
+    }
     const buttons = Array.from(document.querySelectorAll("[data-plan]"));
 
     buttons.forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const fallback = btn.dataset.fallback || btn.getAttribute("href") || "{{STARTER_PAYMENT_LINK}}";
         if (!fallback) return;
+        const email = resolveCheckoutEmail();
+        if (!email) {
+          e.preventDefault();
+          alert("Enter your work email above to continue checkout.");
+          const input = document.getElementById("checkout-email");
+          if (input) input.focus();
+          return;
+        }
+        try {
+          const u = new URL(fallback, window.location.origin);
+          if (u.hostname.includes("buy.stripe.com")) {
+            u.searchParams.set("prefilled_email", email);
+          } else if (u.pathname.includes("/api/checkout/start")) {
+            u.searchParams.set("email", email);
+          }
+          btn.setAttribute("href", u.toString());
+        } catch (_) {}
         if (btn.tagName.toLowerCase() !== "a") {
           e.preventDefault();
           window.location.href = fallback;
