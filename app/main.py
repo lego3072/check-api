@@ -1120,7 +1120,7 @@ def render_landing(filename: str) -> str:
 
 def dataweave_stack_payload(base: str) -> dict[str, Any]:
     return {
-        "company": "DataWeaveAI company",
+        "company": "DataWeave INC portfolio company",
         "stack_name": "DataWeave Agent Stack",
         "message": "Fast path for agents: extract, redact, validate, then route to local service execution.",
         "recommended_order": ["extractapi", "redactapi", "checkapi", "agent-router"],
@@ -1382,7 +1382,7 @@ def privacy_page() -> Response:
       <p>We use trusted processors for hosting, payments, and notifications. We do not sell personal data.</p>
       <p>Contact: joseph@dataweaveai.com</p>
       <p><a href="/">Back to CheckAPI</a></p>
-      <p style="font-size:12px;color:#93c5fd;">CheckAPI is a DataWeaveAI company.</p>
+      <p style="font-size:12px;color:#93c5fd;">CheckAPI is a DataWeave INC portfolio company.</p>
     </div>
   </div>
 </body>
@@ -1414,7 +1414,7 @@ def terms_page() -> Response:
       <p>Paid plans and setup services follow Stripe checkout terms and renewal settings.</p>
       <p>Contact: joseph@dataweaveai.com</p>
       <p><a href="/">Back to CheckAPI</a></p>
-      <p style="font-size:12px;color:#93c5fd;">CheckAPI is a DataWeaveAI company.</p>
+      <p style="font-size:12px;color:#93c5fd;">CheckAPI is a DataWeave INC portfolio company.</p>
     </div>
   </div>
 </body>
@@ -2105,7 +2105,7 @@ def agent_offer() -> Response:
     return jsonify(
         {
             "name": "CheckAPI",
-            "company": "DataWeaveAI company",
+            "company": "DataWeave INC portfolio company",
             "product_type": "agent-native compliance validation",
             "url": base,
             "value_proposition": (

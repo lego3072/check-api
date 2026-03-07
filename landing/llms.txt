@@ -1,7 +1,7 @@
 # CheckAPI
 Last-Updated: 2026-03-06
 Website: {{BASE_URL}}
-Company: DataWeaveAI company
+Company: DataWeave INC portfolio company
 Product: Agent-Native Compliance Guardrail MCP Server
 
 CheckAPI validates AI outputs, contracts, and documents against GDPR, HIPAA, CCPA, SOC2, and ADA.
