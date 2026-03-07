@@ -1197,12 +1197,14 @@ def after_request(resp: Response):
 
 @app.route("/health", methods=["GET"])
 def health() -> Response:
+    instant_activation_ready = bool(STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET and RESEND_API_KEY)
     return jsonify(
         {
             "status": "ok",
             "service": "checkapi",
             "time": now_iso(),
             "payment_ready": not STARTER_PAYMENT_LINK.startswith("https://buy.stripe.com/replace"),
+            "instant_activation_ready": instant_activation_ready,
         }
     )
 
@@ -2545,11 +2547,14 @@ def dataweave_stack_well_known() -> Response:
 
 @app.route("/v1/public/config", methods=["GET"])
 def public_config() -> Response:
+    instant_activation_ready = bool(STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET and RESEND_API_KEY)
     return jsonify(
         {
             "product": "checkapi",
             "base_url": external_base_url(),
             "payment_ready": not STARTER_PAYMENT_LINK.startswith("https://buy.stripe.com/replace"),
+            "instant_activation_ready": instant_activation_ready,
+            "activation_target_seconds": 60,
             "setup_payment_link": SETUP_PAYMENT_LINK,
             "starter_payment_link": plan_checkout_url("starter"),
             "pro_payment_link": plan_checkout_url("pro"),
