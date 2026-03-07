@@ -685,14 +685,6 @@ def payment_link_for_plan(plan: str) -> str:
 
 
 def plan_checkout_url(plan: str) -> str:
-    if (
-        stripe
-        and STRIPE_SECRET_KEY
-        and SELF_SERVE_CHECKOUT_ENABLED
-        and STRIPE_PRICE_IDS.get(plan)
-        and plan in {"starter", "pro", "scale"}
-    ):
-        return f"{external_base_url()}/api/checkout/start?plan={urllib.parse.quote(plan)}"
     return payment_link_for_plan(plan)
 
 
@@ -1290,6 +1282,14 @@ def payment_success_page() -> Response:
       <p id="status-text" class="status">Verifying your Stripe session...</p>
       <p id="detail-text">Session: <code>{session_id or "missing"}</code></p>
       <p>After payment, your API key is sent to the checkout email automatically.</p>
+      <div style="margin-top:12px;padding:10px;border:1px dashed #1b4b76;border-radius:10px;background:#061a2f;">
+        <p style="margin:0 0 8px;"><b>Next 10 minutes:</b></p>
+        <ol style="margin:0;padding-left:18px;color:#cfe5ff;line-height:1.5;">
+          <li>Stripe payment verifies automatically on this page.</li>
+          <li>Your access key email is sent as soon as verification completes.</li>
+          <li>Open docs, run your first call, and request key resend below if needed.</li>
+        </ol>
+      </div>
       <div class="actions">
         <a class="btn btn-primary" href="/docs">Open Docs</a>
         <a class="btn btn-muted" href="/">Back to Home</a>
@@ -2279,14 +2279,16 @@ def create_checkout() -> Response:
             raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
 
         payload = parse_payload()
-        email = clean_text(payload.get("email"), max_len=255).lower()
+        email_raw = clean_text(payload.get("email"), max_len=255).lower()
+        email = email_raw or None
         plan = clean_text(payload.get("plan"), max_len=20).lower()
-        blocked_reason = blocked_checkout_email_reason(email)
-        if blocked_reason:
-            raise ValueError(blocked_reason)
-        email_ok, email_retry = check_rate_limit("checkout_email", bucketize(email), CHECKOUT_RATE_LIMIT_PER_MINUTE)
-        if not email_ok:
-            raise RuntimeError(f"rate_limit_exceeded:{email_retry}")
+        if email:
+            blocked_reason = blocked_checkout_email_reason(email)
+            if blocked_reason:
+                raise ValueError(blocked_reason)
+            email_ok, email_retry = check_rate_limit("checkout_email", bucketize(email), CHECKOUT_RATE_LIMIT_PER_MINUTE)
+            if not email_ok:
+                raise RuntimeError(f"rate_limit_exceeded:{email_retry}")
         if plan not in {"starter", "pro", "scale"}:
             raise ValueError("Invalid plan")
 
@@ -2298,10 +2300,10 @@ def create_checkout() -> Response:
             mode="subscription",
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
-            customer_email=email,
+            customer_email=email or None,
             success_url=f"{external_base_url()}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{external_base_url()}/?checkout=cancelled",
-            metadata={"email": email, "plan": plan, "product": "checkapi"},
+            metadata={"email": email or "", "plan": plan, "product": "checkapi"},
         )
 
         if FOLLOWUP_INBOX_EMAIL:
@@ -2309,17 +2311,18 @@ def create_checkout() -> Response:
                 FOLLOWUP_INBOX_EMAIL,
                 f"CheckAPI checkout started: {plan}",
                 (
-                    f"<p><b>Email:</b> {email}</p>"
+                    f"<p><b>Email:</b> {email or '-'}</p>"
                     f"<p><b>Plan:</b> {plan}</p>"
                     f"<p><b>Session ID:</b> {session.id}</p>"
                 ),
             )
-        schedule_abandoned_checkout_sequence(
-            session_key=session.id,
-            email=email,
-            plan=plan,
-            checkout_url=session.url,
-        )
+        if email:
+            schedule_abandoned_checkout_sequence(
+                session_key=session.id,
+                email=email,
+                plan=plan,
+                checkout_url=session.url,
+            )
 
         return jsonify({"checkout_url": session.url, "session_id": session.id})
     except ValueError as e:
@@ -2343,12 +2346,14 @@ def checkout_start() -> Response:
             raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
 
         plan = clean_text(request.args.get("plan"), max_len=20).lower()
-        email = clean_text(request.args.get("email"), max_len=255).lower()
+        email_raw = clean_text(request.args.get("email"), max_len=255).lower()
+        email = email_raw or None
         if plan not in {"starter", "pro", "scale"}:
             raise ValueError("Invalid plan")
-        blocked_reason = blocked_checkout_email_reason(email)
-        if blocked_reason:
-            raise ValueError(blocked_reason)
+        if email:
+            blocked_reason = blocked_checkout_email_reason(email)
+            if blocked_reason:
+                raise ValueError(blocked_reason)
 
         price_id = STRIPE_PRICE_IDS.get(plan)
         if not price_id:
@@ -2358,18 +2363,19 @@ def checkout_start() -> Response:
             mode="subscription",
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
-            customer_email=email,
+            customer_email=email or None,
             success_url=f"{external_base_url()}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{external_base_url()}/?checkout=cancelled",
-            metadata={"plan": plan, "product": "checkapi", "source": "checkout_start", "email": email},
+            metadata={"plan": plan, "product": "checkapi", "source": "checkout_start", "email": email or ""},
             allow_promotion_codes=True,
         )
-        schedule_abandoned_checkout_sequence(
-            session_key=session.id,
-            email=email,
-            plan=plan,
-            checkout_url=session.url,
-        )
+        if email:
+            schedule_abandoned_checkout_sequence(
+                session_key=session.id,
+                email=email,
+                plan=plan,
+                checkout_url=session.url,
+            )
         return redirect(session.url, code=303)
     except ValueError as e:
         return jsonify({"detail": str(e)}), 400
