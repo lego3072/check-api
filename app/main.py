@@ -122,6 +122,19 @@ SEVERITY_WEIGHT = {
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 API_KEY_RE = re.compile(r"^ck_[a-f0-9]{48}$")
+BLOCKED_CHECKOUT_EMAIL_DOMAINS = {
+    "example.com",
+    "example.org",
+    "example.net",
+    "mailinator.com",
+    "guerrillamail.com",
+    "tempmail.com",
+    "10minutemail.com",
+    "yopmail.com",
+    "trashmail.com",
+    "sharklasers.com",
+}
+BLOCKED_CHECKOUT_LOCAL_TOKENS = ("test", "fake", "demo", "bot", "spam", "temp", "example")
 
 RULES = [
     {
@@ -414,6 +427,20 @@ def clean_text(value: Any, max_len: int = 120000) -> str:
     if len(text) > max_len:
         return text[:max_len]
     return text
+
+
+def blocked_checkout_email_reason(email: str) -> str:
+    normalized = clean_text(email, max_len=255).lower()
+    if not EMAIL_RE.match(normalized):
+        return "Valid email required"
+    local, _, domain = normalized.partition("@")
+    if not local or not domain:
+        return "Valid email required"
+    if domain in BLOCKED_CHECKOUT_EMAIL_DOMAINS or domain.endswith(".invalid"):
+        return "Use a real work email to continue"
+    if any(token in local for token in BLOCKED_CHECKOUT_LOCAL_TOKENS):
+        return "Test/disposable emails are blocked"
+    return ""
 
 
 def month_key() -> str:
@@ -2050,8 +2077,9 @@ def capture_public_lead() -> Response:
         email = clean_text(payload.get("email"), max_len=255).lower()
         plan = clean_text(payload.get("plan"), max_len=20).lower()
         source = clean_text(payload.get("source"), max_len=120) or "site"
-        if not EMAIL_RE.match(email):
-            raise ValueError("Valid email required")
+        blocked_reason = blocked_checkout_email_reason(email)
+        if blocked_reason:
+            raise ValueError(blocked_reason)
         if plan not in {"setup", "starter", "pro", "scale"}:
             raise ValueError("Invalid plan")
 
@@ -2105,8 +2133,9 @@ def create_checkout() -> Response:
         payload = parse_payload()
         email = clean_text(payload.get("email"), max_len=255).lower()
         plan = clean_text(payload.get("plan"), max_len=20).lower()
-        if not EMAIL_RE.match(email):
-            raise ValueError("Valid email required")
+        blocked_reason = blocked_checkout_email_reason(email)
+        if blocked_reason:
+            raise ValueError(blocked_reason)
         email_ok, email_retry = check_rate_limit("checkout_email", bucketize(email), CHECKOUT_RATE_LIMIT_PER_MINUTE)
         if not email_ok:
             raise RuntimeError(f"rate_limit_exceeded:{email_retry}")
@@ -2160,8 +2189,12 @@ def checkout_start() -> Response:
             raise RuntimeError(f"rate_limit_exceeded:{ip_retry}")
 
         plan = clean_text(request.args.get("plan"), max_len=20).lower()
+        email = clean_text(request.args.get("email"), max_len=255).lower()
         if plan not in {"starter", "pro", "scale"}:
             raise ValueError("Invalid plan")
+        blocked_reason = blocked_checkout_email_reason(email)
+        if blocked_reason:
+            raise ValueError(blocked_reason)
 
         price_id = STRIPE_PRICE_IDS.get(plan)
         if not price_id:
@@ -2171,9 +2204,10 @@ def checkout_start() -> Response:
             mode="subscription",
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
+            customer_email=email,
             success_url=f"{external_base_url()}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{external_base_url()}/?checkout=cancelled",
-            metadata={"plan": plan, "product": "checkapi", "source": "checkout_start"},
+            metadata={"plan": plan, "product": "checkapi", "source": "checkout_start", "email": email},
             allow_promotion_codes=True,
         )
         return redirect(session.url, code=303)
@@ -2371,8 +2405,9 @@ def resend_access_key() -> Response:
 
         payload = parse_payload()
         email = clean_text(payload.get("email"), max_len=255).lower()
-        if not EMAIL_RE.match(email):
-            raise ValueError("Valid email required")
+        blocked_reason = blocked_checkout_email_reason(email)
+        if blocked_reason:
+            raise ValueError(blocked_reason)
         record = get_key_record_by_email(email)
         if record and RESEND_API_KEY:
             send_followup_email(
