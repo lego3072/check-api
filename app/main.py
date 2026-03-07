@@ -2163,7 +2163,7 @@ def agent_offer() -> Response:
                 {
                     "path": "self_serve_starter",
                     "cta": plan_checkout_url("starter"),
-                    "description": "Start paid plan for 5,000 checks/month.",
+                    "description": "Start paid plan for 600 checks/month.",
                 },
                 {
                     "path": "self_serve_pro",

@@ -42,9 +42,9 @@ Returns structured JSON with:
 ## Pricing model (default)
 
 - Free: 500 checks/month
-- Starter: 5,000 checks/month ($29/mo)
-- Pro: 25,000 checks/month ($99/mo)
-- Scale: 100,000 checks/month ($299/mo)
+- Starter: 600 checks/month ($29/mo)
+- Pro: 2,000 checks/month ($99/mo)
+- Scale: 6,000 checks/month ($299/mo)
 
 ## Local run
 

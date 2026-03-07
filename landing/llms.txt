@@ -24,7 +24,7 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - Fast onboarding: paid checkout, key delivery, fetch tools, call check before final output
 
 ## DataWeaveAI Unified Bundle (4 Services)
-- ExtractAPI: {{EXTRACT_API_URL}} (document extraction, from $49/month)
+- ExtractAPI: {{EXTRACT_API_URL}} (document extraction, from $199/month)
 - RedactAPI: {{REDACT_API_URL}} (PII/PHI redaction, from $79/month)
 - CheckAPI: {{BASE_URL}} (compliance validation, from $29/month)
 - Agent Router: {{AGENT_ROUTER_URL}} (intent routing + service transactions, from $499/month)
@@ -34,9 +34,9 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - Bundle dashboard: {{AGENT_ROUTER_BUNDLE_DASHBOARD_URL}}
 
 ## Access + Pricing
-- Starter: 5,000 checks/month ($29/month)
-- Pro: 25,000 checks/month ($99/month)
-- Scale: 100,000 checks/month ($299/month)
+- Starter: 600 checks/month ($29/month)
+- Pro: 2,000 checks/month ($99/month)
+- Scale: 6,000 checks/month ($299/month)
 - Optional done-for-you setup: $2,500 one-time
 - Instant paid checkout via `POST /api/public/lead`
 
