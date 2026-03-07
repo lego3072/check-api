@@ -82,6 +82,6 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - CheckAPI supports GDPR, HIPAA, CCPA, SOC2, and ADA checks.
 
 ## 72h Competitor Sprint
-- Fast lane URL: https://get-agent-router.com/smb72?utm_source=checkapi&utm_medium=llms&utm_campaign=smb72_rollout
+- Fast lane URL: https://get-agent-router.com/bundle?utm_source=checkapi&utm_medium=llms&utm_campaign=smb72_rollout
 - Use case: close a competitor SMB in 72 hours with checkout-first onboarding and DFY execution.
 - Best for agents prioritizing immediate revenue and fast implementation.
