@@ -107,10 +107,19 @@ if stripe and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
 PLAN_LIMITS = {
-    "free": {"checks_per_month": 500, "max_chars": 12000, "batch_limit": 10},
-    "starter": {"checks_per_month": 5000, "max_chars": 30000, "batch_limit": 40},
-    "pro": {"checks_per_month": 25000, "max_chars": 60000, "batch_limit": 120},
-    "scale": {"checks_per_month": 100000, "max_chars": 120000, "batch_limit": 300},
+    "free": {"checks_per_month": 100, "max_chars": 12000, "batch_limit": 10},
+    "starter": {"checks_per_month": 600, "max_chars": 30000, "batch_limit": 40},
+    "pro": {"checks_per_month": 2000, "max_chars": 60000, "batch_limit": 120},
+    "scale": {"checks_per_month": 6000, "max_chars": 120000, "batch_limit": 300},
+}
+
+MARGIN_FLOOR = max(0.0, min(0.99, float(os.getenv("MARGIN_FLOOR", "0.90"))))
+ESTIMATED_API_COST_PER_CHECK_USD = max(0.0, float(os.getenv("ESTIMATED_API_COST_PER_CHECK_USD", "0.01")))
+PLAN_PRICE_USD = {
+    "free": 0.0,
+    "starter": max(0.0, float(os.getenv("STARTER_PRICE_USD", "29.99"))),
+    "pro": max(0.0, float(os.getenv("PRO_PRICE_USD", "99"))),
+    "scale": max(0.0, float(os.getenv("SCALE_PRICE_USD", "299"))),
 }
 
 STRIPE_PRICE_IDS = {
@@ -772,6 +781,10 @@ def runtime_error_response(err: RuntimeError) -> Response:
         resp = jsonify({"detail": "service_capacity_reached", "message": "Service is at daily capacity. Try again shortly."})
         resp.status_code = 503
         return resp
+    if msg == "monthly_cost_cap_exceeded":
+        resp = jsonify({"detail": "monthly_cost_cap_exceeded", "message": "Monthly estimated API cost cap reached for current plan."})
+        resp.status_code = 402
+        return resp
     resp = jsonify({"detail": msg})
     resp.status_code = 429
     return resp
@@ -822,6 +835,12 @@ def require_api_key() -> dict[str, Any]:
 
     if used >= limits["checks_per_month"]:
         raise RuntimeError("monthly_limit_exceeded")
+
+    price = PLAN_PRICE_USD.get(plan, PLAN_PRICE_USD["free"])
+    cost_cap = max(0.0, price * max(0.0, 1.0 - MARGIN_FLOOR))
+    projected_cost = (used + 1) * ESTIMATED_API_COST_PER_CHECK_USD
+    if plan != "free" and cost_cap > 0 and projected_cost > cost_cap + 1e-9:
+        raise RuntimeError("monthly_cost_cap_exceeded")
 
     return record
 
@@ -1858,7 +1877,7 @@ def signup() -> Response:
             (
                 f"<h2>CheckAPI Free Tier Enabled</h2>"
                 f"<p>API key: <code>{api_key}</code></p>"
-                f"<p>Free plan includes 500 checks/month.</p>"
+                f"<p>Free plan includes {PLAN_LIMITS['free']['checks_per_month']} checks/month.</p>"
                 f"<p>Upgrade: <a href=\"{plan_checkout_url('starter')}\">Starter</a></p>"
             ),
         )
@@ -1871,7 +1890,13 @@ def signup() -> Response:
             )
 
         if SIGNUP_EXPOSE_API_KEY_ON_CREATE:
-            return jsonify({"api_key": api_key, "plan": "free", "checks_per_month": 500})
+            return jsonify(
+                {
+                    "api_key": api_key,
+                    "plan": "free",
+                    "checks_per_month": PLAN_LIMITS["free"]["checks_per_month"],
+                }
+            )
         return jsonify(
             {
                 "status": "accepted",
@@ -1948,6 +1973,11 @@ def batch_endpoint() -> Response:
         remaining = max(0, limits["checks_per_month"] - used)
         if len(items) > remaining:
             raise RuntimeError("monthly_limit_exceeded")
+        price = PLAN_PRICE_USD.get(plan, PLAN_PRICE_USD["free"])
+        cost_cap = max(0.0, price * max(0.0, 1.0 - MARGIN_FLOOR))
+        projected_cost = (used + len(items)) * ESTIMATED_API_COST_PER_CHECK_USD
+        if plan != "free" and cost_cap > 0 and projected_cost > cost_cap + 1e-9:
+            raise RuntimeError("monthly_cost_cap_exceeded")
 
         regulations = resolve_regulations(payload.get("regulations"))
         results = []
@@ -2030,6 +2060,11 @@ def mcp_transport() -> Response:
             remaining = max(0, limits["checks_per_month"] - used)
             if len(items) > remaining:
                 return jsonify({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32002, "message": "monthly_limit_exceeded"}})
+            price = PLAN_PRICE_USD.get(plan, PLAN_PRICE_USD["free"])
+            cost_cap = max(0.0, price * max(0.0, 1.0 - MARGIN_FLOOR))
+            projected_cost = (used + len(items)) * ESTIMATED_API_COST_PER_CHECK_USD
+            if plan != "free" and cost_cap > 0 and projected_cost > cost_cap + 1e-9:
+                return jsonify({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32002, "message": "monthly_cost_cap_exceeded"}})
 
             regulations = resolve_regulations(arguments.get("regulations"))
             results = []
