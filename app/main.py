@@ -81,8 +81,9 @@ STRIPE_STARTER_MONTHLY = os.getenv("STRIPE_STARTER_MONTHLY", "").strip()
 STRIPE_PRO_MONTHLY = os.getenv("STRIPE_PRO_MONTHLY", "").strip()
 STRIPE_SCALE_MONTHLY = os.getenv("STRIPE_SCALE_MONTHLY", "").strip()
 SELF_SERVE_CHECKOUT_ENABLED = env_bool("SELF_SERVE_CHECKOUT_ENABLED", True)
-SIGNUP_EXPOSE_API_KEY_ON_CREATE = env_bool("SIGNUP_EXPOSE_API_KEY_ON_CREATE", True)
+SIGNUP_EXPOSE_API_KEY_ON_CREATE = env_bool("SIGNUP_EXPOSE_API_KEY_ON_CREATE", False)
 FREE_SIGNUP_ENABLED = env_bool("FREE_SIGNUP_ENABLED", False)
+REQUIRE_PAID_PLAN = env_bool("REQUIRE_PAID_PLAN", True)
 
 MAX_TEXT_CHARS_GLOBAL = env_int("MAX_TEXT_CHARS_GLOBAL", 120000)
 MAX_REQUEST_BYTES = env_int("MAX_REQUEST_BYTES", 1_200_000)
@@ -805,6 +806,9 @@ def require_api_key() -> dict[str, Any]:
         raise PermissionError("Invalid API key")
 
     plan = str(record.get("plan", "free")).lower()
+
+    if REQUIRE_PAID_PLAN and plan == "free":
+        raise PermissionError("Paid plan required")
 
     if GLOBAL_DAILY_CHECK_CAP > 0:
         if checks_today() >= GLOBAL_DAILY_CHECK_CAP:
