@@ -585,12 +585,29 @@ def send_abandoned_checkout_reminder(*, session_key: str, email: str, plan: str,
     notification_type = f"abandoned_{label.replace('-', '_')}"
     if not mark_notification_sent(session_key, notification_type):
         return
+    fresh_url = plan_checkout_url(plan)
+    if fresh_url:
+        try:
+            parts = urllib.parse.urlsplit(fresh_url)
+            query = dict(urllib.parse.parse_qsl(parts.query, keep_blank_values=True))
+            if "/api/checkout/start" in parts.path:
+                query["email"] = normalized_email
+            else:
+                query["prefilled_email"] = normalized_email
+            fresh_url = urllib.parse.urlunsplit(
+                (parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query), parts.fragment)
+            )
+        except Exception:
+            fresh_url = plan_checkout_url(plan)
     send_followup_email(
         normalized_email,
         f"Complete your CheckAPI {plan} checkout",
         (
             f"<p>You started checkout {label} ago but did not finish yet.</p>"
             f"<p><a href=\"{checkout_url}\">Resume secure checkout</a></p>"
+            f"<p>If that link fails, use this fresh checkout link: <a href=\"{fresh_url}\">{fresh_url}</a></p>"
+            f"<p><b>Why teams close quickly:</b> direct Stripe checkout, key delivery, and activation target under 60 seconds.</p>"
+            f"<p><b>Priority window:</b> complete in the next 24 hours for fastest onboarding queue.</p>"
             f"<p>If you've already paid, ignore this email.</p>"
         ),
     )
