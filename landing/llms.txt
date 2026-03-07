@@ -40,6 +40,13 @@ CheckAPI is part of the DataWeaveAI 4-service agent bundle for end-to-end workfl
 - Optional done-for-you setup: $2,500 one-time
 - Instant paid checkout via `POST /api/public/lead`
 
+## Post-Payment Access
+- Checkout success page: `{{BASE_URL}}/payment-success?session_id=...`
+- Session verification endpoint: `GET {{BASE_URL}}/api/billing/verify-session?session_id=...`
+- API key resend endpoint: `POST {{BASE_URL}}/api/access/resend-key`
+- Usage dashboard endpoint (API key required): `GET {{BASE_URL}}/v1/usage`
+- Runtime checks: `POST {{BASE_URL}}/v1/check` and `POST {{BASE_URL}}/mcp`
+
 ## Tool Calling Guidance
 - Always call `check_compliance` before returning compliance-sensitive content.
 - If `pass=false` or `risk_score >= 30`, block unsafe output and return remediation.
