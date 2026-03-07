@@ -4,6 +4,7 @@ import re
 import secrets
 import sqlite3
 import hashlib
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -92,6 +93,10 @@ WEBHOOK_RATE_LIMIT_PER_MINUTE = env_int("WEBHOOK_RATE_LIMIT_PER_MINUTE", 120)
 API_RATE_LIMIT_PER_KEY_PER_MINUTE = env_int("API_RATE_LIMIT_PER_KEY_PER_MINUTE", 240)
 API_RATE_LIMIT_PER_IP_PER_MINUTE = env_int("API_RATE_LIMIT_PER_IP_PER_MINUTE", 360)
 RATE_LIMIT_WINDOW_SECONDS = env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
+ABANDONED_REMINDERS_ENABLED = env_bool("ABANDONED_REMINDERS_ENABLED", True)
+ABANDONED_REMINDER_10M_SECONDS = env_int("ABANDONED_REMINDER_10M_SECONDS", 600)
+ABANDONED_REMINDER_6H_SECONDS = env_int("ABANDONED_REMINDER_6H_SECONDS", 21600)
+ABANDONED_REMINDER_24H_SECONDS = env_int("ABANDONED_REMINDER_24H_SECONDS", 86400)
 
 FREE_SIGNUPS_PER_IP_PER_DAY = env_int("FREE_SIGNUPS_PER_IP_PER_DAY", 8)
 GLOBAL_DAILY_CHECK_CAP = env_int("GLOBAL_DAILY_CHECK_CAP", 30000)
@@ -537,6 +542,82 @@ def mark_notification_sent(session_id: str, notif_type: str) -> bool:
         return True
     except sqlite3.IntegrityError:
         return False
+
+
+def abandoned_reminder_steps() -> list[tuple[int, str]]:
+    return [
+        (max(5, ABANDONED_REMINDER_10M_SECONDS), "10-minute"),
+        (max(5, ABANDONED_REMINDER_6H_SECONDS), "6-hour"),
+        (max(5, ABANDONED_REMINDER_24H_SECONDS), "24-hour"),
+    ]
+
+
+def has_active_paid_plan(email: str) -> bool:
+    record = get_key_record_by_email(email)
+    if not record:
+        return False
+    return str(record.get("plan", "free")).lower() in {"starter", "pro", "scale"}
+
+
+def checkout_session_marked_paid(session_key: str) -> bool:
+    if not session_key:
+        return False
+    with conn() as c:
+        row = c.execute(
+            """
+            SELECT 1
+            FROM billing_notifications
+            WHERE stripe_session_id = ?
+              AND notification_type IN ('paid_checkout', 'access_delivery', 'access_delivery_verify')
+            LIMIT 1
+            """,
+            (session_key,),
+        ).fetchone()
+    return bool(row)
+
+
+def send_abandoned_checkout_reminder(*, session_key: str, email: str, plan: str, checkout_url: str, label: str) -> None:
+    normalized_email = clean_text(email, max_len=255).lower()
+    if not EMAIL_RE.match(normalized_email):
+        return
+    if checkout_session_marked_paid(session_key) or has_active_paid_plan(normalized_email):
+        return
+    notification_type = f"abandoned_{label.replace('-', '_')}"
+    if not mark_notification_sent(session_key, notification_type):
+        return
+    send_followup_email(
+        normalized_email,
+        f"Complete your CheckAPI {plan} checkout",
+        (
+            f"<p>You started checkout {label} ago but did not finish yet.</p>"
+            f"<p><a href=\"{checkout_url}\">Resume secure checkout</a></p>"
+            f"<p>If you've already paid, ignore this email.</p>"
+        ),
+    )
+
+
+def schedule_abandoned_checkout_sequence(*, session_key: str, email: str, plan: str, checkout_url: str) -> None:
+    if not ABANDONED_REMINDERS_ENABLED or not RESEND_API_KEY:
+        return
+    normalized_email = clean_text(email, max_len=255).lower()
+    if not EMAIL_RE.match(normalized_email):
+        return
+    if not session_key:
+        return
+    for delay_seconds, label in abandoned_reminder_steps():
+        timer = threading.Timer(
+            delay_seconds,
+            send_abandoned_checkout_reminder,
+            kwargs={
+                "session_key": session_key,
+                "email": normalized_email,
+                "plan": plan,
+                "checkout_url": checkout_url,
+                "label": label,
+            },
+        )
+        timer.daemon = True
+        timer.start()
 
 
 def send_followup_email(to_email: str, subject: str, html_body: str) -> bool:
@@ -2097,6 +2178,9 @@ def capture_public_lead() -> Response:
 
         record_sales_lead(email, plan, source, utm)
         checkout_url = checkout_link_with_prefilled_email(link, email)
+        lead_session_key = "lead_" + hashlib.sha256(
+            f"{email}:{plan}:{datetime.now(timezone.utc).date().isoformat()}".encode("utf-8")
+        ).hexdigest()[:28]
 
         if FOLLOWUP_INBOX_EMAIL:
             send_followup_email(
@@ -2110,6 +2194,12 @@ def capture_public_lead() -> Response:
                     f"<p><b>UTM:</b> source={utm['utm_source']}, medium={utm['utm_medium']}, campaign={utm['utm_campaign']}</p>"
                 ),
             )
+        schedule_abandoned_checkout_sequence(
+            session_key=lead_session_key,
+            email=email,
+            plan=plan,
+            checkout_url=checkout_url,
+        )
 
         return jsonify({"checkout_url": checkout_url, "plan": plan, "captured": True})
     except ValueError as e:
@@ -2166,6 +2256,12 @@ def create_checkout() -> Response:
                     f"<p><b>Session ID:</b> {session.id}</p>"
                 ),
             )
+        schedule_abandoned_checkout_sequence(
+            session_key=session.id,
+            email=email,
+            plan=plan,
+            checkout_url=session.url,
+        )
 
         return jsonify({"checkout_url": session.url, "session_id": session.id})
     except ValueError as e:
@@ -2209,6 +2305,12 @@ def checkout_start() -> Response:
             cancel_url=f"{external_base_url()}/?checkout=cancelled",
             metadata={"plan": plan, "product": "checkapi", "source": "checkout_start", "email": email},
             allow_promotion_codes=True,
+        )
+        schedule_abandoned_checkout_sequence(
+            session_key=session.id,
+            email=email,
+            plan=plan,
+            checkout_url=session.url,
         )
         return redirect(session.url, code=303)
     except ValueError as e:
