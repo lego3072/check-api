@@ -113,8 +113,8 @@ PLAN_LIMITS = {
     "scale": {"checks_per_month": 6000, "max_chars": 120000, "batch_limit": 300},
 }
 
-MARGIN_FLOOR = max(0.0, min(0.99, float(os.getenv("MARGIN_FLOOR", "0.80"))))
-ESTIMATED_API_COST_PER_CHECK_USD = max(0.0, float(os.getenv("ESTIMATED_API_COST_PER_CHECK_USD", "0.01")))
+MARGIN_FLOOR = max(0.0, min(0.99, float(os.getenv("MARGIN_FLOOR", "0.90"))))
+ESTIMATED_API_COST_PER_CHECK_USD = max(0.0, float(os.getenv("ESTIMATED_API_COST_PER_CHECK_USD", "0.001")))
 PLAN_PRICE_USD = {
     "free": 0.0,
     "starter": max(0.0, float(os.getenv("STARTER_PRICE_USD", "29.99"))),
